@@ -2,8 +2,12 @@
   "SCP096": [
     {"Id": "TriggerDelay", "Type": "TEXT", "TextVal": "8"},
     {"Id": "CalmingDelay", "Type": "TEXT", "TextVal": "4"},
-    {"Id": "TickSeconds", "Type": "TEXT", "TextVal": "0.30"},
+    {"Id": "TickSeconds", "Type": "TEXT", "TextVal": "0.25"},
     {"Id": "AttackDistance", "Type": "TEXT", "TextVal": "1.7"},
+    {"Id": "ProximityWitnesses", "Type": "SWITCH", "BoolVal": true},
+    {"Id": "ProximityDistance", "Type": "TEXT", "TextVal": "5"},
+    {"Id": "ProximityScanSeconds", "Type": "TEXT", "TextVal": "1.5"},
+    {"Id": "MaxWitnesses", "Type": "TEXT", "TextVal": "64"},
     {"Id": "DebugLogs", "Type": "SWITCH", "BoolVal": true}
   ]
 }

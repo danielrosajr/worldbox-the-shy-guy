@@ -1,50 +1,19 @@
-# TESTES ESPECIFICOS v0.1.3
+# Testes da v0.1.5-alpha — WorldBox 0.51.2 build 719
 
-1. Em um mundo de teste, gere um SCP e um humano.
-2. Posicione cursor no humano, aperte F7 e confira `Alvo: N tiles`.
-3. Sem esperar a perseguicao, clique `Teste: eliminar alvo selecionado (manual)`.
-4. Esperado: alvo deixa de estar vivo, painel mostra `TESTE DE MORTE OK: Actor.dieSimpleNone()`; se nao, registra metodo ausente ou excecao.
-5. Depois gere outro humano, marque F7, espere TRIGGERED→RAGE e aproxime. A morte automatica deve acontecer no alcance configurado (1.7 tiles).
-6. Se o alvo nao morrer, pressione F9 para registrar assinatura real e campos de sombra.
-7. Repita opcionalmente com WorldFall, comparando erros `FirstPerson` e FPS.
-8. Nunca use o teste de morte em um mundo importante.
+**Use um mundo novo e descartável. Não carregue o save importante.**
 
-# Plano de teste da v0.1.2 alpha
+1. Instale apenas `SCP096-TheShyGuy-0.1.5` na pasta Mods e confira versão no painel.
+2. Verifique `Traits: registradas` no log. Caso falhe, envie stack trace completo do Player.log.
+3. Com a opção de proximidade desligada no painel, crie SCP e um humano 10–20 tiles longe. Aponte o cursor para o humano, F7. Aguarde os 8 segundos de TRIGGERED. Confirme no log `Perseguicao: Actor.goTo(WorldTile,Boolean)` e distância decrescendo. Espere a criatura se aproximar e matar o humano.
+4. Repita com proximidade ligada: coloque 3 humanos a até 5 tiles do SCP. O painel deverá mostrar fila=3 e, após cada execução, mudar para a próxima vítima. Se o SCP ficar travado, pressione F9.
+5. Crie um humano a 30–50 tiles do SCP em terra contínua. Aponte o cursor para o humano e clique `Escolher alvo mapa`. Confirme que o alvo foi marcado mesmo longe do SCP. Não exija travessia de oceanos.
+6. Confirme se o sprite é branco e se os avisos `missing all animation_swim`, `child idle` e `Shadow size is too small` desaparecem. Se continuarem, envie log e diagnóstico F9.
+7. Salve e recarregue o mundo, verificando se Witness permanece nos NPCs e é detectado novamente. Atenção: a ordem FIFO antes do save ainda não é persistida.
+8. Apenas depois de validar sem WorldFall, teste com ele ativado. Compare FPS e exceções com/sem a perseguição do SCP.
 
-## Antes de testar
+Comando para enviar:
 
-- [ ] Backup dos saves e mundo descartavel.
-- [ ] WorldBox 2D, inicialmente sem WorldFall.
-- [ ] Pasta da v0.1.0 removida, mantendo somente v0.1.2.
-- [ ] Painel visivel no canto direito com `Mapa: Mapa pronto`.
-
-## Diagnostico
-
-- [ ] Botao `Teste: humano` cria um humano comum perto do centro.
-- [ ] Botao `Gerar aqui` cria SCP-096 perto do centro, ou mostra falha no painel.
-- [ ] Se falhou, registrar texto `REGISTRO FALHOU` ou `SPAWN FALHOU`.
-- [ ] `Posicionar SCP` + clique no terreno deve tentar criar o ator no local clicado.
-- [ ] Se houver SCP, segundo spawn deve exibir aviso de duplicata.
-- [ ] `Diagnostico` deixa no log assinaturas do mapa, spawn, clone e actor.
-
-## Fluxo de IA (somente se o spawn funcionar)
-
-- [ ] `Marcar alvo` proximo de NPC mostra estado Triggered.
-- [ ] Apos tempo de preparacao, estado vai para Rage.
-- [ ] Se o SCP nao perseguir, registrar `Perseguicao nao confirmada` e logs.
-- [ ] Se alcancar o alvo, tentar ciclo nativo de morte; registrar falha se houver.
-- [ ] Cancelar alvo e validar Rage -> Calming -> Docile.
-- [ ] Salvar e recarregar mundo de teste, verificar duplicacao e persistencia.
-
-## Para enviar a proxima correcao
-
-Captura do painel apos clicar `Gerar aqui`, trecho de Player.log com `[SCP096]`, versao do WorldBox/NML. Se a assinatura real for diferente, envie os assemblies listados em `scripts/collect-reference-assemblies.sh`.
-
-## Regressao 0.1.2: erros do log do usuario
-
-- [ ] Ao abrir mundo novo, nao ocorre aviso de sombra `(0.00,0.00)` nem de `texture_path_baby` associado a `scp096_shyguy`.
-- [ ] O SCP nasce com sprite herdado do humano nesta versao de estabilidade (verificar visual).
-- [ ] Painel mostra a distancia do alvo diminuindo durante RAGE.
-- [ ] Durante RAGE, esperar no minimo 8 segundos para observar eventual aviso de ator parado.
-- [ ] Comparar cenario com WorldFall desligado, ligado e `Perseguir/atacar` desligado.
-- [ ] Guardar capturas do painel e trecho do `Player.log` com `[SCP096]` + `FirstPerson`.
+```bash
+grep -nE 'SCP096|Trait|Shadow size|animation_|Exception|goTo|FirstPerson' \
+  ~/.config/unity3d/mkarpenko/WorldBox/Player.log | tail -200
+```

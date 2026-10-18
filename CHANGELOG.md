@@ -1,5 +1,26 @@
 # CHANGELOG
 
+## 0.1.5-alpha — 18/10/2026
+- Reaproveita do The Unrelenting o padrão `Actor.cancelAllBeh()` + `Actor.goTo(WorldTile, false)` e intervalos adaptativos de navegação.
+- Adiciona `ArvakSCP096_Witness`, trait `ArvakSCP096_RageSpeed` (+85 speed) e fila FIFO de testemunhas com máximo configurável.
+- Marca por proximidade <=5 tiles por padrão como aproximação temporária, configurável no NML e painel; leitura de rosto permanece pendente.
+- Varre traits a cada 12s para restaurar fila de portadores após carregar mundo, sem garantia de preservar a ordem histórica.
+- Corrige classificação prematura de falha de `dieSimpleNone()` aguardando confirmação posterior.
+- Complementa animações `swim_0`..`swim_3`, redireciona `texture_path_baby` e ajusta shadow_size mínimo experimentalmente.
+- Seleção distante pode ser ativada pelo botão Escolher alvo mapa e clique posterior; Shift+F7 seleciona o NPC mais próximo do cursor sem limite de raio.
+- Testes estáticos apenas; execução no jogo e compatibilidade WorldFall pendentes.
+
+
+## 0.1.4-alpha — 18/10/2026
+- Troca template humano por template selvagem `sheep` para evitar comportamentos civilizados e construcao de aldeias.
+- Reintroduz tentativa de carregamento sprite exclusivo SCP com referencias herdadas de sombra e recursos infantis.
+- Adiciona modo experimental de alvo global sem limite de distancia, separado de F7 proximo ao cursor.
+- DiagnosticReadiness/F9 inclui origem, status visual, flags efetivamente desativadas.
+- Reforca aviso de instalacao limpa e identifica v0.1.2 ainda carregada no log recebido.
+- Mantem teste de morte da v0.1.3 (so confirmado apos teste local do usuario).
+
+# CHANGELOG
+
 ## 0.1.3-alpha — 18/10/2026
 - Troca tentativa especulativa `die()`/`killHimself()` por `Actor.dieSimpleNone()` (evidencia externa, WorldBox 0.51.2 build 719).
 - Confere registro `units_only_alive` antes/depois da chamada: nao considera sucesso somente por reflexao sem excecao.

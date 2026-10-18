@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using System.Collections.Generic;
 using NeoModLoader.api;
 using UnityEngine;
 
@@ -7,54 +8,53 @@ namespace SCP096TheShyGuy
 {
     public sealed class ModClass : BasicMod<ModClass>
     {
+        private const string Version = "0.1.5";
+        private const int MaxAttackAttempts = 3;
         private WorldBridge _world;
         private ShyGuyBrain _brain;
+        private readonly WitnessQueue _queue = new WitnessQueue();
+        private readonly HashSet<object> _sessionOnlyWitnesses = new HashSet<object>();
         private object _scp;
-        private object _victim;
+        private object _victim; // always mirrors the FIFO head
+        private object _lastIssuedVictim; // distinguishes SCP kills from unrelated deaths
         private object _observedMap;
-        private float _tickAt;
-        private float _scanAt;
-        private float _chaseAt;
-        private bool _movementWarningSent;
-        private bool _movementMethodLogged;
-        private bool _enableChase = true;
-        private float _lastProgressAt;
-        private float _lastProgressX;
-        private float _lastProgressY;
-        private bool _progressInitialized;
-        private bool _stuckWarningSent;
-        private bool _attackWarningSent;
+        private float _tickAt, _scanAt, _proximityScanAt, _fullWitnessScanAt, _chaseAt, _behaviorAt;
+        private float _lastProgressAt, _lastProgressX, _lastProgressY;
         private float _attackRetryAt;
-        private int _attackAttempts;
-        private const int MaxAttackAttempts = 3;
-        private bool _initialized;
-        private bool _showPanel = true;
-        private bool _placeOnMap;
+        private bool _progressInitialized, _stuckWarningSent, _movementMethodLogged;
+        private bool _enableChase = true;
+        private bool _enableProximity = true;
+        private bool _traitsRegistered, _rageTraitApplied;
+        private bool _killPending;
+        private int _attackAttempts, _killsConfirmed;
+        private bool _initialized, _showPanel = true, _placeOnMap, _selectRemote;
         private string _status = "Inicializando...";
-        private string _registrationError = "";
-        private float _triggerDelay = 8f;
-        private float _calmingDelay = 4f;
-        private float _tickSeconds = 0.30f;
-        private float _attackDistance = 1.7f;
+        private float _triggerDelay = 8f, _calmingDelay = 4f;
+        private float _tickSeconds = .25f, _attackDistance = 1.7f;
+        private float _proximityDistance = 5f, _proximityTickSeconds = 1.5f;
+        private int _maxWitnesses = 64;
         private bool _debugLogs = true;
+        private Vector2 _scroll;
 
-        private Rect PanelRect => new Rect(Mathf.Max(4, Screen.width - 352), 72, 345, 478);
+        private Rect PanelRect => new Rect(Mathf.Max(4f, Screen.width - 362f), 48f, 354f,
+            Mathf.Min(625f, Mathf.Max(225f, Screen.height - 65f)));
 
         protected override void OnModLoad()
         {
             _world = new WorldBridge();
             _brain = new ShyGuyBrain();
             ReadSettings();
+            _traitsRegistered = ShyGuyTraits.Register();
+            Log("Traits: " + (_traitsRegistered ? "registradas: Witness, RageSpeed" : "REGISTRO FALHOU; ver Player.log"));
             string reason;
             if (_world.TryRegisterAsset(GetDeclaration().FolderPath, out reason))
-                Log("Asset registrado: " + WorldBridge.ScpId);
-            else
             {
-                _registrationError = reason;
-                Log("Registro pendente: " + reason + " (tentaremos novamente ao gerar).");
+                Log("Asset registrado: " + WorldBridge.ScpId + " a partir de " + _world.SourcePrototype);
+                Log("Visual: " + _world.AppearanceStatus + "; flags: " + _world.ExtraFlagsStatus);
             }
+            else Log("Asset pendente: " + reason);
             _initialized = true;
-            Log("v0.1.3 alpha: teste de morte dieSimpleNone(); F5 painel; F6 spawn; F7 alvo; F8 cancelar; F9 diagnostico.");
+            Log("v" + Version + " alpha: goTo(WorldTile,bool), cancelAllBeh, witness FIFO + traits, rage-speed, death ACK");
         }
 
         private void Update()
@@ -62,119 +62,223 @@ namespace SCP096TheShyGuy
             if (!_initialized) return;
             float now = Time.unscaledTime;
             if (Input.GetKeyDown(KeyCode.F5)) _showPanel = !_showPanel;
-            if (Input.GetKeyDown(KeyCode.Escape)) _placeOnMap = false;
+            if (Input.GetKeyDown(KeyCode.Escape)) { _placeOnMap = false; _selectRemote = false; }
             if (Input.GetKeyDown(KeyCode.F6))
                 Spawn(Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift));
-            if (Input.GetKeyDown(KeyCode.F7)) MarkVictim(now);
+            if (Input.GetKeyDown(KeyCode.F7))
+            {
+                if (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift)) MarkVictimAnywhere(now);
+                else MarkVictim(now);
+            }
             if (Input.GetKeyDown(KeyCode.F8)) CancelTarget();
             if (Input.GetKeyDown(KeyCode.F9)) Diagnostic();
-            if (_placeOnMap && Input.GetMouseButtonDown(0) && !PointerInsidePanel())
+            if (Input.GetMouseButtonDown(0) && !PointerInsidePanel())
             {
-                _placeOnMap = false;
-                SpawnOnClickedTile();
+                if (_placeOnMap) { _placeOnMap = false; SpawnOnClickedTile(); }
+                else if (_selectRemote) { _selectRemote = false; MarkVictim(now); }
             }
-
             if (now < _tickAt) return;
             _tickAt = now + _tickSeconds;
             if (!_world.HasMap) return;
             if (!ReferenceEquals(_observedMap, _world.Map))
             {
                 _observedMap = _world.Map;
-                _scp = null;
-                _victim = null;
+                _scp = _victim = _lastIssuedVictim = null;
+                _queue.Clear();
+                _sessionOnlyWitnesses.Clear();
                 _brain.Reset(now);
-                _scanAt = 0;
-                _placeOnMap = false;
+                _scanAt = _proximityScanAt = _fullWitnessScanAt = 0f;
+                _rageTraitApplied = false;
+                _placeOnMap = _selectRemote = false;
                 ResetChaseProgress(now);
             }
+
             if (now >= _scanAt)
             {
                 _scanAt = now + 2.5f;
-                if (!_world.Exists(_scp))
+                if (!_world.IsAlive(_scp))
                 {
                     _scp = _world.FindExistingScp();
                     _victim = null;
+                    _queue.Clear();
+                    _sessionOnlyWitnesses.Clear();
                     _brain.Reset(now);
-                    _movementWarningSent = false;
-                    _attackWarningSent = false;
-                    _movementMethodLogged = false;
+                    _rageTraitApplied = false;
                     ResetChaseProgress(now);
-                }
-                if (_victim != null && !_world.IsAlive(_victim))
-                {
-                    Log("Vitima nao esta mais viva; encerrando alvo.");
-                    _victim = null;
+                    if (_scp != null && _traitsRegistered)
+                        _world.RemoveTrait(_scp, ShyGuyTraits.RageId);
                 }
             }
             if (_scp == null) return;
+
+            if (now >= _proximityScanAt)
+            {
+                _proximityScanAt = now + _proximityTickSeconds;
+                bool fullScan = now >= _fullWitnessScanAt;
+                if (fullScan) _fullWitnessScanAt = now + 12f;
+                ReconcileWitnesses(now, fullScan);
+            }
+            UpdateCurrentTarget(now);
+
             ShyGuyState before = _brain.State;
             _brain.Tick(now, _victim != null, _triggerDelay, _calmingDelay);
             if (before != _brain.State)
             {
                 Log("Estado: " + before + " -> " + _brain.State + " (" + _brain.LastReason + ")");
-                _world.TrySetSpeed(_brain.State == ShyGuyState.Rage ? 100f : 12f);
-                if (_brain.State == ShyGuyState.Rage) ResetChaseProgress(now);
+                if (_brain.State == ShyGuyState.Rage)
+                {
+                    _rageTraitApplied = _traitsRegistered && _world.AddTrait(_scp, ShyGuyTraits.RageId);
+                    if (!_rageTraitApplied) Log("AVISO: bonus de velocidade da trait Rage nao foi aplicado");
+                    ResetChaseProgress(now);
+                    _world.TryInterruptBehaviors(_scp);
+                }
+                else if (before == ShyGuyState.Rage)
+                {
+                    if (_traitsRegistered) _world.RemoveTrait(_scp, ShyGuyTraits.RageId);
+                    _rageTraitApplied = false;
+                    _world.TryInterruptBehaviors(_scp);
+                }
             }
+
             if (_brain.State == ShyGuyState.Rage && _victim != null && _enableChase)
             {
                 if (_world.Within(_scp, _victim, _attackDistance))
                 {
-                    if (now >= _attackRetryAt && _attackAttempts < MaxAttackAttempts)
+                    if (!_killPending && now >= _attackRetryAt && _attackAttempts < MaxAttackAttempts)
                     {
-                        _attackRetryAt = now + 2f;
                         _attackAttempts++;
-                        if (_world.TryKill(_victim))
-                        {
-                            Log("EXECUCAO CONFIRMADA: " + _world.LastKillSignature);
-                            _victim = null;
-                        }
-                        else if (!_attackWarningSent)
-                        {
-                            Log("Ataque tentativa " + _attackAttempts + ": " + _world.LastKillSignature);
-                            _attackWarningSent = true;
-                        }
-                        else if (_attackAttempts >= MaxAttackAttempts)
-                            Log("ATAQUE INTERROMPIDO apos 3 tentativas: " + _world.LastKillSignature +
-                                ". Use F9 e envie Player.log.");
+                        _attackRetryAt = now + 3f;
+                        _killPending = _world.TryKill(_victim);
+                        if (_killPending) _lastIssuedVictim = _victim;
+                        Log((_killPending ? "EXECUCAO SOLICITADA" : "ATAQUE NAO ENVIADO") +
+                            " tentativa=" + _attackAttempts + ": " + _world.LastKillSignature);
+                    }
+                    else if (_killPending && now >= _attackRetryAt)
+                    {
+                        // Delayed confirmation: only retry if still actually alive.
+                        _killPending = false;
+                        if (_attackAttempts >= MaxAttackAttempts)
+                            Log("ATAQUE SEM CONFIRMACAO apos 3 tentativas; alvo ainda vivo. Verificar diagnostico.");
                     }
                 }
                 else
                 {
+                    // Don't keep an old kill pending after the target escapes.
                     TrackChaseProgress(now);
+                    if (now >= _behaviorAt)
+                    {
+                        // This pattern is taken from the working The Unrelenting.
+                        bool interrupted = _world.TryInterruptBehaviors(_scp);
+                        _behaviorAt = now + 3f;
+                        if (interrupted) _chaseAt = 0f;
+                    }
                     if (now >= _chaseAt)
                     {
-                        // Avoid repeatedly resetting a live path on every sub-second tick.
-                        _chaseAt = now + 1.5f;
-                        if (!_world.TryChase(_scp, _victim))
+                        float distance = _world.Distance(_scp, _victim);
+                        _chaseAt = now + MotionTickSeconds(distance);
+                        if (_world.TryChase(_scp, _victim))
                         {
-                            if (!_movementWarningSent)
+                            if (!_movementMethodLogged)
                             {
-                                Log("Perseguicao nao confirmada: " + _world.LastMoveSignature);
-                                _movementWarningSent = true;
+                                _movementMethodLogged = true;
+                                Log("Perseguicao: " + _world.LastMoveSignature +
+                                    "; distancia inicial=" + _world.TargetDistance(_scp, _victim));
                             }
                         }
-                        else if (!_movementMethodLogged)
-                        {
-                            _movementMethodLogged = true;
-                            Log("Perseguicao enviada por " + _world.LastMoveSignature +
-                                ". Isto nao garante deslocamento real; observe a distancia no painel.");
-                        }
+                        else LogOnceMovementError();
                     }
                 }
             }
         }
 
-        private void ResetChaseProgress(float now)
+        private bool _movementErrorLogged;
+        private void LogOnceMovementError()
         {
-            _chaseAt = 0f;
-            _progressInitialized = false;
-            _stuckWarningSent = false;
-            _lastProgressAt = now;
-            _attackRetryAt = 0;
-            _attackAttempts = 0;
-            _attackWarningSent = false;
+            if (_movementErrorLogged) return;
+            _movementErrorLogged = true;
+            Log("Perseguicao falhou: " + _world.LastMoveSignature);
         }
 
+        private static float MotionTickSeconds(float distance)
+        {
+            if (distance > 50f) return 1.6f;
+            if (distance > 15f) return .8f;
+            if (distance > 5f) return .35f;
+            return .18f;
+        }
+
+        private void ReconcileWitnesses(float now, bool fullScan)
+        {
+            int removed = _queue.RemoveInvalid(a =>
+                _world.IsAlive(a) && (!_traitsRegistered || _sessionOnlyWitnesses.Contains(a) ||
+                    _world.HasTrait(a, ShyGuyTraits.WitnessId)));
+            if (removed > 0) Log("Fila: " + removed + " alvo(s) removido(s) por morte/trait ausente");
+            _sessionOnlyWitnesses.RemoveWhere(a => !_world.IsAlive(a) || !_queue.Contains(a));
+            // One bounded scan per 1.5s, never one raycast for every actor each frame.
+            foreach (object actor in _world.Actors())
+            {
+                if (ReferenceEquals(actor, _scp)) continue;
+                if (_queue.Count >= _maxWitnesses) break;
+                bool newlyObserved = _enableProximity &&
+                    _world.Within(_scp, actor, _proximityDistance);
+                // Full-world trait scan only every 12 seconds, not every frame.
+                if (!newlyObserved && !fullScan) continue;
+                bool alreadyMarked = _traitsRegistered && _world.HasTrait(actor, ShyGuyTraits.WitnessId);
+                if (!alreadyMarked && !newlyObserved) continue;
+                if (_world.AssetId(actor) == WorldBridge.ScpId) continue;
+                if (_queue.Contains(actor)) continue;
+                EnqueueWitness(actor, now, alreadyMarked ? "trait recuperada do save" : "proximidade experimental 5 tiles");
+            }
+        }
+
+        private void EnqueueWitness(object candidate, float now, string source)
+        {
+            if (candidate == null || !_world.IsAlive(candidate) ||
+                ReferenceEquals(candidate, _scp) || _world.AssetId(candidate) == WorldBridge.ScpId ||
+                _queue.Contains(candidate) || _queue.Count >= _maxWitnesses) return;
+            if (_traitsRegistered && !_world.AddTrait(candidate, ShyGuyTraits.WitnessId))
+            {
+                _sessionOnlyWitnesses.Add(candidate);
+                Log("AVISO: nao foi possivel colocar trait Witness; alvo permanece apenas nesta sessao");
+            }
+            if (!_queue.Enqueue(candidate, _maxWitnesses)) return;
+            Log("TESTEMUNHA MARCADA via " + source + "; fila=" + _queue.Count +
+                "; distancia=" + _world.TargetDistance(_scp, candidate));
+            if (_brain.State == ShyGuyState.Docile || _brain.State == ShyGuyState.Calming)
+                _brain.Transition(ShyGuyState.Triggered, now, "primeira testemunha: " + source);
+        }
+
+        private void UpdateCurrentTarget(float now)
+        {
+            object next = _queue.First;
+            if (ReferenceEquals(next, _victim)) return;
+            object old = _victim;
+            if (old != null && !_world.IsAlive(old))
+            {
+                if (ReferenceEquals(old, _lastIssuedVictim))
+                {
+                    _killsConfirmed++;
+                    Log("MORTE CONFIRMADA: eliminacao solicitada pelo SCP; total=" + _killsConfirmed);
+                }
+                else Log("Alvo morreu ou desapareceu sem execucao solicitada pelo SCP");
+            }
+            if (ReferenceEquals(old, _lastIssuedVictim)) _lastIssuedVictim = null;
+            _victim = next;
+            ResetChaseProgress(now);
+            if (_victim != null)
+                Log("PROXIMA VITIMA: fila=" + _queue.Count +
+                    "; distancia=" + _world.TargetDistance(_scp, _victim));
+        }
+
+        private void ResetChaseProgress(float now)
+        {
+            _chaseAt = _behaviorAt = 0f;
+            _progressInitialized = _stuckWarningSent = _movementMethodLogged = false;
+            _movementErrorLogged = _killPending = false;
+            _attackAttempts = 0;
+            _attackRetryAt = 0f;
+            _lastProgressAt = now;
+        }
         private void TrackChaseProgress(float now)
         {
             if (!_world.Position(_scp, out float x, out float y)) return;
@@ -186,9 +290,8 @@ namespace SCP096TheShyGuy
                 _progressInitialized = true;
                 return;
             }
-            float dx = x - _lastProgressX;
-            float dy = y - _lastProgressY;
-            if (dx * dx + dy * dy >= 0.75f * 0.75f)
+            float dx = x - _lastProgressX, dy = y - _lastProgressY;
+            if (dx * dx + dy * dy >= .75f * .75f)
             {
                 _lastProgressX = x;
                 _lastProgressY = y;
@@ -197,8 +300,8 @@ namespace SCP096TheShyGuy
             }
             else if (!_stuckWarningSent && now - _lastProgressAt > 8f)
             {
-                // Diagnostic only: do not teleport or edit actor position directly.
-                Log("AVISO: SCP parado ha mais de 8s durante RAGE. Metodo=" + _world.LastMoveSignature);
+                Log("AVISO: SCP parado 8s durante RAGE. Movimento=" + _world.LastMoveSignature +
+                    "; distancia=" + _world.TargetDistance(_scp, _victim));
                 _stuckWarningSent = true;
             }
         }
@@ -209,211 +312,175 @@ namespace SCP096TheShyGuy
             Vector3 mouse = Input.mousePosition;
             return PanelRect.Contains(new Vector2(mouse.x, Screen.height - mouse.y));
         }
-
         private void OnGUI()
         {
             if (!_initialized) return;
             Rect r = PanelRect;
             if (!_showPanel)
             {
-                if (GUI.Button(new Rect(Mathf.Max(4, Screen.width - 133), 72, 125, 30), "SCP-096 [F5]"))
+                if (GUI.Button(new Rect(Mathf.Max(4f, Screen.width - 141f), 48, 133, 31), "SCP-096 [F5]"))
                     _showPanel = true;
                 return;
             }
-
-            GUI.Box(r, "SCP-096 - THE SHY GUY  |  v0.1.3");
-            float x = r.x + 12, y = r.y + 30;
-            GUI.Label(new Rect(x, y, 315, 23), "Mapa: " + _world.Readiness);
-            y += 24;
-            GUI.Label(new Rect(x, y, 315, 23), "Asset: " +
-                (_world.AssetRegistered ? "REGISTRADO" : "PENDENTE (ver diagnostico)"));
-            y += 24;
-            GUI.Label(new Rect(x, y, 315, 23), "Criatura: " + (_scp != null ? "encontrada" : "nao encontrada") +
-                "  |  Estado: " + _brain.State);
-            y += 24;
-            GUI.Label(new Rect(x, y, 319, 22), "Alvo: " + (_victim == null ? "nenhum" : _world.TargetDistance(_scp, _victim)));
-            y += 22;
-            bool enableChase = GUI.Toggle(new Rect(x, y, 315, 22), _enableChase,
-                "Perseguir/atacar (desmarcar p/ teste)");
-            if (enableChase != _enableChase)
-            {
-                _enableChase = enableChase;
-                ResetChaseProgress(Time.unscaledTime);
-                Log(_enableChase ? "Perseguicao habilitada." :
-                    "Perseguicao e ataque do SCP suspensos para teste de compatibilidade.");
-            }
-            y += 28;
-            if (GUI.Button(new Rect(x, y, 153, 32), "Gerar aqui [F6]")) Spawn(false);
-            if (GUI.Button(new Rect(x + 161, y, 158, 32), "Gerar isolado")) Spawn(true);
-            y += 39;
-            if (GUI.Button(new Rect(x, y, 319, 32), _placeOnMap ? "AGUARDANDO CLIQUE NO MAPA (ESC cancela)" :
-                "Posicionar SCP: clicar no mapa"))
+            GUI.Box(r, "SCP-096 - THE SHY GUY | v" + Version);
+            if (GUI.Button(new Rect(r.x + r.width - 28, r.y + 3, 24, 22), "X")) _showPanel = false;
+            Rect viewport = new Rect(r.x + 6, r.y + 28, r.width - 12, r.height - 35);
+            _scroll = GUI.BeginScrollView(viewport, _scroll, new Rect(0, 0, 324, 605));
+            float y = 0, x = 3;
+            GUI.Label(new Rect(x,y,315,23), "Mapa: " + _world.Readiness); y+=23;
+            GUI.Label(new Rect(x,y,315,23), "SCP: " + (_scp != null ? "encontrado" : "nenhum") +
+                "  |  Estado: " + _brain.State); y+=23;
+            GUI.Label(new Rect(x,y,315,23), "Fila de testemunhas: " + _queue.Count +
+                " | Eliminadas: " + _killsConfirmed); y+=23;
+            GUI.Label(new Rect(x,y,315,23), "Alvo: " + (_victim == null ? "nenhum" : _world.TargetDistance(_scp, _victim))); y+=25;
+            _enableChase = GUI.Toggle(new Rect(x,y,315,23), _enableChase, "Perseguir e eliminar"); y+=25;
+            _enableProximity = GUI.Toggle(new Rect(x,y,320,23), _enableProximity,
+                "Marcar NPCs a " + _proximityDistance.ToString("0") + " tiles (aproximacao)"); y+=29;
+            if (GUI.Button(new Rect(x,y,152,31), "Gerar aqui [F6]")) Spawn(false);
+            if (GUI.Button(new Rect(x+160,y,156,31), "Gerar isolado")) Spawn(true);
+            y+=38;
+            if (GUI.Button(new Rect(x,y,316,31), _placeOnMap ? "CLIQUE NO MAPA (ESC cancela)" : "Posicionar SCP no mapa"))
             {
                 _placeOnMap = !_placeOnMap;
-                if (_placeOnMap) Log("Modo posicionamento ativado: clique em uma area de terra no mapa.");
+                if (_placeOnMap) _selectRemote = false;
             }
-            y += 39;
-            if (GUI.Button(new Rect(x, y, 153, 30), "Marcar alvo [F7]")) MarkVictim(Time.unscaledTime);
-            if (GUI.Button(new Rect(x + 161, y, 158, 30), "Cancelar [F8]")) CancelTarget();
-            y += 38;
-            if (GUI.Button(new Rect(x, y, 153, 29), "Teste: humano")) SpawnTestHuman();
-            if (GUI.Button(new Rect(x + 161, y, 158, 29), "Diagnostico [F9]")) Diagnostic();
-            y += 37;
-            if (GUI.Button(new Rect(x, y, 319, 29), "Teste: eliminar alvo selecionado (manual)")) TestKillVictim();
-            y += 36;
-            GUI.Label(new Rect(x, y, 319, 20), "Resultado da ultima acao:");
-            y += 21;
-            GUIStyle feedbackStyle = new GUIStyle(GUI.skin.label);
-            feedbackStyle.wordWrap = true;
-            GUI.Label(new Rect(x, y, 319, 76), _status, feedbackStyle);
-            if (GUI.Button(new Rect(r.x + r.width - 26, r.y + 5, 20, 20), "X")) _showPanel = false;
+            y+=39;
+            if (GUI.Button(new Rect(x,y,152,31), "Alvo [F7]")) MarkVictim(Time.unscaledTime);
+            if (GUI.Button(new Rect(x+160,y,156,31), _selectRemote ? "CLIQUE NO NPC" : "Escolher alvo mapa"))
+            {
+                _selectRemote = !_selectRemote;
+                if (_selectRemote) _placeOnMap = false;
+            }
+            y+=39;
+            if (GUI.Button(new Rect(x,y,316,29), "Cancelar fila [F8]")) CancelTarget(); y+=37;
+            if (GUI.Button(new Rect(x,y,152,29), "Teste: humano")) SpawnTestHuman();
+            if (GUI.Button(new Rect(x+160,y,156,29), "Diagnostico [F9]")) Diagnostic();
+            y+=37;
+            if (GUI.Button(new Rect(x,y,316,31), "Teste: eliminar primeiro alvo")) TestKillVictim();
+            y+=40;
+            GUI.Label(new Rect(x,y,315,20), "Ultimo resultado:"); y+=21;
+            GUIStyle feedback = new GUIStyle(GUI.skin.label); feedback.wordWrap = true;
+            GUI.Label(new Rect(x,y,314,105), _status, feedback);
+            GUI.EndScrollView();
         }
 
         private void Spawn(bool isolated)
         {
             if (!_world.HasMap) { Log("Nao foi possivel gerar: " + _world.Readiness); return; }
             object tile = isolated ? _world.IsolatedTile() : _world.VisibleTile();
-            if (tile == null)
-            {
-                Log(isolated ? "Nao encontrei area isolada. Use posicionamento manual."
-                    : "Centro da tela sem terreno valido. Use 'Posicionar SCP' e clique na terra.");
-                return;
-            }
+            if (tile == null) { Log("Sem tile valido. Use posicionamento manual."); return; }
             SpawnAtTile(tile);
         }
-
         private void SpawnOnClickedTile()
         {
-            if (!_world.HasMap) { Log("Nao foi possivel gerar: " + _world.Readiness); return; }
+            if (!_world.HasMap) { Log("Sem mapa carregado"); return; }
             object tile = _world.MouseTile();
-            if (tile == null) { Log("Nao foi possivel localizar o tile do mouse; teste F6 e confira o diagnostico."); return; }
+            if (tile == null) { Log("Tile do mouse indisponivel"); return; }
             SpawnAtTile(tile);
         }
-
         private void SpawnAtTile(object tile)
         {
-            if (_world.FindExistingScp() != null)
+            _scp = _world.FindExistingScp();
+            if (_scp != null)
             {
-                _scp = _world.FindExistingScp();
-                Log("Ja existe um SCP-096 neste mundo. Nao criei duplicata. Coordenadas: " +
+                Log("Ja existe SCP-096 neste mundo. Coordenadas=" +
                     _world.TileCoordinates(_world.ActorTile(_scp)));
                 return;
             }
-            if (!_world.AssetRegistered)
-            {
-                if (!_world.TryRegisterAsset(GetDeclaration().FolderPath, out string error))
-                {
-                    _registrationError = error;
-                    Log("REGISTRO FALHOU: " + error);
-                    return;
-                }
-                _registrationError = "";
-            }
+            if (!_world.AssetRegistered && !_world.TryRegisterAsset(GetDeclaration().FolderPath, out string error))
+            { Log("REGISTRO FALHOU: " + error); return; }
             object actor = _world.SpawnAt(tile, out string reason);
-            if (actor == null)
-            {
-                Log("SPAWN FALHOU em " + _world.TileCoordinates(tile) + ": " + reason);
-                return;
-            }
+            if (actor == null) { Log("SPAWN FALHOU: " + reason); return; }
             _scp = actor;
             _victim = null;
+            _queue.Clear();
             _brain.Reset(Time.unscaledTime);
-            _movementWarningSent = _attackWarningSent = _movementMethodLogged = false;
             ResetChaseProgress(Time.unscaledTime);
-            Log("SCP-096 criado em " + _world.TileCoordinates(tile) +
-                ". Visual pode aparecer como humano ate validarmos as texturas.");
+            Log("SCP-096 criado em " + _world.TileCoordinates(tile) + "; visual=" + _world.AppearanceStatus);
         }
-
         private void SpawnTestHuman()
         {
-            if (!_world.HasMap) { Log("Teste humano falhou: " + _world.Readiness); return; }
             object tile = _world.VisibleTile();
-            if (tile == null) { Log("Teste humano: nenhum tile visivel valido."); return; }
+            if (tile == null) { Log("Tile indisponivel"); return; }
             object human = _world.SpawnTestHuman(tile, out string reason);
-            Log(human == null ? "Teste humano FALHOU: " + reason :
-                "Teste humano OK em " + _world.TileCoordinates(tile) +
-                ". Se SCP falhar, envie o diagnostico e logs.");
+            Log(human == null ? "Teste humano falhou: " + reason :
+                "Teste humano OK em " + _world.TileCoordinates(tile));
         }
-
         private void MarkVictim(float now)
         {
-            if (!_world.HasMap) { Log("Marcar alvo falhou: " + _world.Readiness); return; }
             _scp = _world.FindExistingScp();
-            if (_scp == null) { Log("Primeiro crie um SCP-096 usando o painel ou F6."); return; }
+            if (_scp == null) { Log("Primeiro crie SCP-096"); return; }
             object cursor = _world.MouseTile();
             object victim = cursor == null ? null : _world.NearestVictim(_scp, cursor, 12f);
-            if (victim == null) victim = _world.NearestVictim(_scp, _world.ActorTile(_scp), 70f);
-            if (victim == null) { Log("Nenhum personagem encontrado perto do cursor ou SCP."); return; }
-            _victim = victim;
-            ResetChaseProgress(now);
-            _movementMethodLogged = false;
-            if (_brain.State == ShyGuyState.Docile || _brain.State == ShyGuyState.Calming)
-                _brain.Transition(ShyGuyState.Triggered, now, "testemunha marcada manualmente");
-            Log("Alvo marcado. Estado=" + _brain.State + "; preparacao=" + _triggerDelay + "s.");
+            if (victim == null) { Log("Nenhuma unidade viva ate 12 tiles do cursor"); return; }
+            EnqueueWitness(victim, now, "cursor F7");
+            UpdateCurrentTarget(now);
         }
-
+        private void MarkVictimAnywhere(float now)
+        {
+            _scp = _world.FindExistingScp();
+            if (_scp == null) { Log("Primeiro crie SCP-096"); return; }
+            object victim = _world.NearestVictimAnywhere(_scp);
+            if (victim == null) { Log("Nenhuma unidade viva no mapa"); return; }
+            EnqueueWitness(victim, now, "cursor global");
+            UpdateCurrentTarget(now);
+        }
         private void TestKillVictim()
         {
-            if (!_world.HasMap || _victim == null || !_world.IsAlive(_victim))
-            {
-                Log("Teste de morte: marque primeiro uma vitima viva com F7.");
-                return;
-            }
-            // Explicit debug-only action: unlike RAGE, ignores target distance.
-            // NEVER use in a non-disposable world; this intentionally kills one NPC.
-            if (_world.TryKill(_victim))
-            {
-                Log("TESTE DE MORTE OK: " + _world.LastKillSignature);
-                _victim = null;
-                ResetChaseProgress(Time.unscaledTime);
-            }
-            else
-                Log("TESTE DE MORTE FALHOU: " + _world.LastKillSignature);
+            if (_victim == null || !_world.IsAlive(_victim))
+            { Log("Marque primeiro uma vitima viva"); return; }
+            _killPending = _world.TryKill(_victim);
+            if (_killPending) _lastIssuedVictim = _victim;
+            _attackRetryAt = Time.unscaledTime + 3f;
+            Log((_killPending ? "TESTE DE MORTE SOLICITADO" : "TESTE DE MORTE FALHOU") +
+                ": " + _world.LastKillSignature);
         }
-
         private void CancelTarget()
         {
-            _victim = null;
+            if (_traitsRegistered)
+                foreach (object actor in _queue.Snapshot())
+                    if (_world.IsAlive(actor)) _world.RemoveTrait(actor, ShyGuyTraits.WitnessId);
+            _queue.Clear();
+            _sessionOnlyWitnesses.Clear();
+            _victim = _lastIssuedVictim = null;
             ResetChaseProgress(Time.unscaledTime);
-            Log("Alvo removido. SCP voltara a DOCILE pelo ciclo normal.");
+            Log("Fila cancelada; SCP retornara a DOCILE pelo ciclo normal");
         }
-
         private void Diagnostic()
         {
-            string details = _world.DiagnosticReadiness();
-            Log("Diagnostico: " + details);
-            Log("Estado=" + _brain.State + ", SCP=" + (_scp != null) + ", alvo=" + (_victim != null) +
-                ", chaseEnabled=" + _enableChase + ", lastMove=" + _world.LastMoveSignature +
-                ", distancia=" + _world.TargetDistance(_scp, _victim));
+            Log("DIAGNOSTICO v" + Version + ": " + _world.DiagnosticReadiness());
+            Log("SCP=" + (_scp != null) + " state=" + _brain.State + " fila=" + _queue.Count +
+                " traits=" + _traitsRegistered + " rageTrait=" + _rageTraitApplied +
+                " proximidade=" + _enableProximity + " distancia=" + _world.TargetDistance(_scp, _victim));
             Log(_world.DiagnosticMethods(_scp));
             Log(_world.DiagnosticShadows());
-            Log("Ultimo ataque=" + _world.LastKillSignature + ", tentativas=" + _attackAttempts);
-            _status = "Diagnostico gravado em Player.log. " + details;
+            Log("Ultimo movimento=" + _world.LastMoveSignature + " ultima execucao=" + _world.LastKillSignature);
         }
-
         private void ReadSettings()
         {
             try
             {
-                _triggerDelay = ConfigFloat("TriggerDelay", 8, 0, 120);
-                _calmingDelay = ConfigFloat("CalmingDelay", 4, 0, 120);
-                _tickSeconds = ConfigFloat("TickSeconds", .30f, .1f, 5f);
+                _triggerDelay = ConfigFloat("TriggerDelay", 8f, 0f, 120f);
+                _calmingDelay = ConfigFloat("CalmingDelay", 4f, 0f, 120f);
+                _tickSeconds = ConfigFloat("TickSeconds", .25f, .1f, 5f);
                 _attackDistance = ConfigFloat("AttackDistance", 1.7f, .5f, 10f);
+                _proximityDistance = ConfigFloat("ProximityDistance", 5f, 1f, 20f);
+                _proximityTickSeconds = ConfigFloat("ProximityScanSeconds", 1.5f, .5f, 10f);
+                _maxWitnesses = (int)ConfigFloat("MaxWitnesses", 64f, 1f, 256f);
+                object proximity = GetConfig()["SCP096"]["ProximityWitnesses"].GetValue();
+                if (proximity is bool) _enableProximity = (bool)proximity;
                 object debug = GetConfig()["SCP096"]["DebugLogs"].GetValue();
                 if (debug is bool) _debugLogs = (bool)debug;
             }
-            catch (Exception e) { Log("Configuracao padrao aplicada: " + e.Message); }
+            catch (Exception ex) { Log("Usando defaults: " + ex.Message); }
         }
-
-        private float ConfigFloat(string id, float fallback, float min, float max)
+        private float ConfigFloat(string key, float fallback, float min, float max)
         {
-            object val = GetConfig()["SCP096"][id].GetValue();
-            if (val == null) return fallback;
-            if (!float.TryParse(Convert.ToString(val), NumberStyles.Float, CultureInfo.InvariantCulture, out float n))
-                return fallback;
+            object v = GetConfig()["SCP096"][key].GetValue();
+            if (v == null || !float.TryParse(Convert.ToString(v), NumberStyles.Float,
+                CultureInfo.InvariantCulture, out float n)) return fallback;
             return Mathf.Clamp(n, min, max);
         }
-
         private void Log(string message)
         {
             _status = message;

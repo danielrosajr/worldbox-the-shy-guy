@@ -1,139 +1,86 @@
-# SCP-096: The Shy Guy — v0.1.3 alpha
+# SCP-096: The Shy Guy — v0.1.5-alpha
 
-> **ALFA DIAGNOSTICA.** Arquivos C# de NeoModLoader. Nao compilada nem testada no jogo deste ambiente. Salve e faca backup dos mundos importantes antes de testar.
+**Alvo: WorldBox 0.51.2, build 719 + NeoModLoader em Ubuntu.**
 
-## O que mudou na v0.1.3 (18/10/2026)
+Código experimental preparado a partir de `SCP096 v0.1.4` e da análise do ZIP **The Unrelenting** fornecido pelo usuário. Esta entrega **não foi compilada com Assembly-CSharp.dll nem testada dentro do WorldBox**. Use apenas mundos descartáveis e faça backup de saves importantes.
 
-1. **Falha ao matar a vitima:** o codigo antigo so procurava `killHimself()`/`die()` sem argumentos e nao tinha evidencia desses metodos no build 719. Esta versao utiliza `Actor.dieSimpleNone()` por reflexao, documentado por testes de ciclo de vida de terceiros no WorldBox 0.51.2 build 719. A chamada so e considerada confirmada quando o alvo deixa o registro de unidades vivas. Essa implementacao ainda precisa ser validada no SEU executavel.
-2. **Teste isolado de morte:** apos marcar F7, botao `Teste: eliminar alvo selecionado (manual)` chama a rotina de morte sem precisar de perseguicao ou proximidade. ATENCAO: mata de proposito o aldeao selecionado, use apenas mundo descartavel.
-3. **Sem repeticao infinita:** se o SCP chega a distancia de ataque e nao consegue confirmar a morte, ele tenta no maximo tres vezes, a intervalos de 2 s, e registra a falha no Player.log.
-4. **Diagnostico adicional de sombras:** F9 imprime os campos de sombra dos assets SCP/humano para comparar configuracoes. Os tres avisos de sombra `(0,0)` vistos no novo log ainda podem ocorrer. Eles nao sao a mesma excecao de FirstPerson vista no relatorio anterior.
-5. **Sem garantia de animacao de ataque:** a acao de morte e instantanea e pode nao gerar animacao visual. O proximo passo apos provar o ciclo de morte sera um ataque real animado.
+## O que mudou na v0.1.5
 
-Referencia de API com evidencias de ciclo de vida: https://lous12.github.io/worldbox-modding-docs/quick/actors/
+### 1. Perseguição com API que já funcionou no The Unrelenting
 
-## Histórico da v0.1.2
+O código antigo priorizava `moveTo(WorldTile)`, que reportava sucesso sem efetivamente deslocar a criatura. O código enviado no The Unrelenting usa:
 
-### Correcoes baseadas no log de 18/10/2026
-
-1. **Sprites e sombras (correcao parcial)** — os erros `Actor Asset scp096_shyguy does not have head sprite for baby`, `texture_path_baby doesn't exist`, tinham relacao direta com o codigo que substituia o `texture_asset` do humano por um `ActorTextureSubAsset` incompleto. Os avisos de sombra `(0, 0)` continuam pendentes. A v0.1.2 passou a manter as texturas herdadas do humano, priorizando estabilidade. **O visual exclusivo SCP-096 pode nao aparecer** ate integrarmos a textura corretamente. Os PNGs originais continuam no pacote.
-2. **Perseguicao irregular** — o intervalo entre tentativas de `goTo`/`moveTo` foi aumentado para evitar resetar a rota muitas vezes. O painel exibe distancia ate o alvo e registra se ele ficar parado mais de 8 segundos durante RAGE. **Nao sabemos ainda se o caminho nativo esta correto.**
-3. **WorldFall/FirstPerson** — a `NullReferenceException` ocorreu em `Actor.checkCalibrateTargetPosition` chamada por `FirstPerson.WalkPace.Step`. Isso indica um hook da familia FirstPerson/WorldFall, mas nao prova que o SCP provocou o erro. O novo checkbox `Perseguir/atacar` permite testar o mesmo mundo sem que o mod envie comandos de movimento/ataque.
-
-**Nao ha correcao garantida para a NullReferenceException nesta versao.** Evite testes em saves importantes.
-
-
-A v0.1.0 dependia de atalhos F6 e Shift+F6, mas nao tinha nenhum elemento de interface que confirmasse as acoes. O F6 gerava o SCP longe do centro da tela, fazendo parecer que nada tinha ocorrido. Esta versao inclui um **painel de teste visivel no canto superior direito**, mensagens de retorno, spawn no centro da camera e posicionamento por clique no mapa.
-
-Tambem mantemos o parametro opcional `adult=true` no metodo `spawnNewUnit`, quando presente, para evitar gerar um filhote. Esta mudanca corresponde a assinatura documentada de WorldBox 0.51.2, nao constitui validacao da sua versao.
-
-## Instalar (Ubuntu / Steam)
-
-1. Feche o WorldBox.
-2. Localize a pasta usada pelo NML para carregar mods (em instalacoes comuns, `~/.steam/debian-installation/steamapps/common/worldbox/Mods`).
-3. **Remova as pastas ANTIGAS** `SCP096-TheShyGuy-0.1.0`, `SCP096-TheShyGuy-0.1.1` e `SCP096-TheShyGuy-0.1.2` da pasta de mods para nao carregar varias versoes.
-4. Extraia a pasta `SCP096-TheShyGuy-0.1.3` contida no ZIP diretamente na pasta de mods.
-5. Abra WorldBox e crie **um mundo descartavel** com bastante terra firme; inicialmente teste sem WorldFall.
-6. Procure um pequeno painel `SCP-096 - THE SHY GUY | v0.1.3` no canto superior direito.
-
-Exemplo de instalacao por terminal, executado na pasta onde voce baixou o ZIP:
-
-```bash
-GAME="$HOME/.steam/debian-installation/steamapps/common/worldbox"
-rm -rf "$GAME/Mods/SCP096-TheShyGuy-0.1.0"
-rm -rf "$GAME/Mods/SCP096-TheShyGuy-0.1.1"
-rm -rf "$GAME/Mods/SCP096-TheShyGuy-0.1.2"
-rm -rf "$GAME/Mods/SCP096-TheShyGuy-0.1.3"
-unzip -o SCP096-TheShyGuy-v0.1.3-alpha.zip -d "$GAME/Mods"
+```csharp
+_host.cancelAllBeh();
+_host.goTo(_target.current_tile, false);
 ```
 
-Confirme o caminho `GAME` antes de executar, pois algumas instalacoes Steam usam outro diretorio. A exclusao acima atinge apenas as pastas identificadas deste mod. Nao edite a pasta bootstrap `worldbox_Data/StreamingAssets/mods`.
+Agora `WorldBridge.TryChase` localiza `goTo(WorldTile, bool)` por reflexão e usa `false` como segundo argumento. A cada três segundos, quando em perseguição, `cancelAllBeh()` interrompe rotinas concorrentes. Os comandos de rota têm intervalos adaptativos (1.6s a 0.18s conforme distância). O método de um parâmetro permanece como fallback de diagnóstico. **Isso não prova ainda travessia de oceanos nem navegação livre de obstáculos.**
 
-## Controles e painel
+### 2. Testemunhas com trait e fila FIFO
 
-| Acao | Como testar |
+- `ArvakSCP096_Witness`: trait própria, pode ser colocada manualmente na lista de traits do jogo, se o registro estiver disponível.
+- `ArvakSCP096_RageSpeed`: trait técnica temporária que dá +85 de velocidade durante RAGE e é removida ao se acalmar.
+- Novas testemunhas entram no **final da fila**, sem duplicatas. O SCP segue sempre o primeiro alvo vivo. Após a morte, passa ao próximo.
+- Qualquer NPC/animal que passe a até **5 tiles** do SCP pode ser marcado automaticamente. Isso é uma **aproximação experimental** do olhar, não uma detecção visual real! A opção vem ligada para facilitar o teste; pode ser desligada no painel ou na configuração. O limite inicial é 64 testemunhas.
+- Durante RAGE, novas unidades que chegam perto também entram no fim da fila.
+- Um scan global de traits ocorre a cada 12 segundos, além do scan de proximidade configurável.
+- A trait persiste pelo mecanismo de traits/salvamento do jogo (a verificar no WorldBox). Ao carregar um mundo, a fila será recriada a partir dos portadores da trait, **mas a ordem histórica original NÃO é preservada** na versão atual.
+
+### 3. Morte e confirmação
+
+`dieSimpleNone()` já eliminou vítimas no teste do usuário. A versão anterior registrava erroneamente falha logo depois da chamada e sucesso no tick seguinte. Agora a execução só é contada como confirmada depois da morte observada. Se o método é chamado sem exceção, a mensagem diz **EXECUCAO SOLICITADA**, não `FALHOU`.
+
+### 4. Visuais
+
+Foram adicionados `swim_0` a `swim_3` para **Main** e **child**, reutilizando os sprites de caminhada originais como placeholders. Foi configurado `texture_path_baby` para a pasta própria e aumentados os valores mínimos de sombra do clone experimental. O resultado visual precisa ser verificado dentro do jogo; não há garantia de eliminação de todos os avisos.
+
+## Instalação limpa
+
+1. Feche WorldBox.
+2. Localize a pasta `Mods` do NeoModLoader. No Ubuntu com Steam, uma instalação frequente é:
+   `~/.steam/debian-installation/steamapps/common/worldbox/Mods`
+3. **Mova todas as pastas anteriores de SCP096 para fora da pasta Mods.** Não altere o The Unrelenting ou WorldFall.
+4. Extraia este ZIP para a pasta `Mods`, ficando:
+   `Mods/SCP096-TheShyGuy-0.1.5/mod.json`.
+5. Abra o jogo e use um **mundo pequeno e descartável**. Confirme no painel a versão `v0.1.5`.
+
+## Controles
+
+| Botão/tecla | Resultado |
 |---|---|
-| Gerar aqui | Botao `Gerar aqui [F6]` ou tecla F6. Tenta criar SCP sobre terra proxima ao **centro da tela**. |
-| Gerar isolado | Botao `Gerar isolado` ou **Shift+F6**. Tenta criar em local remoto; a criatura **nao estara necessariamente visivel**. |
-| Posicionar no mapa | Clique `Posicionar SCP: clicar no mapa`, depois clique no terreno. ESC cancela. |
-| Marcar vitima | Botao `Marcar alvo [F7]` ou F7. Procura um personagem perto do cursor ou SCP. |
-| Cancelar alvo | Botao `Cancelar [F8]` ou F8. |
-| Teste humano | Botao `Teste: humano`: cria um humano **vanilla** no centro da tela para investigar se a API de spawn funciona. E apenas uma ferramenta diagnostica. |
-| Diagnostico | Botao `Diagnostico [F9]` ou F9. Detalhes no `Player.log` incluindo sombras e metodo de morte. |
-| Testar eliminacao | Marque uma vitima com F7, clique `Teste: eliminar alvo selecionado (manual)` e observe se ela desaparece/morre. Essa acao IGNORA DISTANCIA e serve somente para testar o metodo de morte. |
-| Isolar WorldFall | Desmarque `Perseguir/atacar` para testar se o erro ainda ocorre quando o SCP nao comanda nenhum alvo. |
-| Mostrar/ocultar painel | F5 ou botao `X`. |
+| F5 | Mostrar/esconder painel |
+| F6 | Gerar próximo ao centro da câmera |
+| Shift + F6 | Gerar isolado |
+| Posicionar SCP no mapa | Gerar clicando no terreno |
+| F7 | Adicionar NPC perto do cursor (raio de 12 tiles) ao final da fila |
+| Shift + F7 | Adicionar unidade viva mais próxima do cursor, sem limite de distância entre SCP e vítima |
+| Escolher alvo mapa | Ativar o modo de marcação: clique depois no mapa perto do NPC (até 12 tiles do clique) |
+| Marcar NPCs a 5 tiles | Liga/desliga o gatilho experimental por proximidade |
+| F8 | Cancelar toda a fila, retirar as traits Witness das vítimas encontradas |
+| Teste: humano | Criar humano para teste |
+| Teste: eliminar primeiro alvo | Executar comando de morte sem requisito de distância (somente teste) |
+| F9 | Diagnóstico no Player.log |
 
-**Shift sozinho nao cria nada.** F6 pode ser interceptado pelo sistema operacional ou jogo; por isso prefira o painel, que nao depende dos atalhos.
+## Limitações assumidas
 
-O painel mostra estado do mapa, se o asset foi registrado, distancia do alvo, controle de perseguicao e resultado da ultima acao. Se a criatura existir mas o sprite ainda aparecer como humano, isso e uma limitacao visual da versao alfa.
+- Não há leitura do rosto, direção da câmera do WorldFall, obstrução visual nem fotografias.
+- Não há persistência confiável da **ordem** FIFO entre sessões; a lista é reconstruída pela leitura das traits salvas.
+- A criatura é clonada a partir de `sheep` para impedir comportamento de aldeão; atributos de espécie/animações ainda podem demandar ajustes.
+- Perseguição transoceânica, gelo e liberação de trajetos presos não implementados.
+- Mudança de velocidade depende de a engine recalcular o bônus ao colocar a trait na unidade.
+- O conjunto de sprites é incompleto para funcionalidades futuras. Correções atuais são hipóteses para os erros registrados.
+- WorldFall não foi carregado nem inspecionado nesta entrega; eventuais exceções `FirstPerson` devem ser investigadas separadamente.
 
-## Roteiro minimo de depuracao
-
-1. Clique **Teste: humano**. Se nao funcionar, a incompatibilidade provavelmente esta no acesso a mapa/tile/spawn.
-2. Clique **Gerar aqui**. Se nao funcionar, leia `REGISTRO FALHOU` ou `SPAWN FALHOU` no painel.
-3. Se o SCP nascer, tente **Marcar alvo** perto de uma cidade com habitantes. Aguarde o estado passar de `Triggered` para `Rage`.
-4. Se ele nao perseguir, clique **Diagnostico** e veja as linhas `UNRESOLVED` e assinaturas de metodos no log.
-
-Se precisar de ajuda, envie uma captura do painel apos tentar criar, e/ou estas linhas do log:
-
-```bash
-LOG=$(find "$HOME/.config/unity3d" -name Player.log -type f 2>/dev/null | head -1)
-echo "Log encontrado: $LOG"
-if [ -n "$LOG" ]; then
-  grep -nE 'SCP096|NeoModLoader|error CS|Exception' "$LOG" | tail -100
-fi
-```
-
-Nao assuma que a presenca do mod na lista de mods prova que suas classes, sprites e acoes carregaram. O painel e o log ajudam a distinguir os casos.
-
-## Situacao tecnica
-
-- `BasicMod<T>` com `OnModLoad -> Update` esta documentado pelo projeto de exemplo do NML.
-- O painel usa `MonoBehaviour.OnGUI` do Unity, sem depender de uma API customizada de janelas do WorldBox. E temporario e voltado a testes.
-- A verificacao de um SCP por mapa usa `AssetId` e varredura de unidades. Nao cria automaticamente uma criatura em mundos novos.
-- O clone do ator humano, os sprites, IA de perseguicao, invulnerabilidade, ataque fatal e persistencia **ainda nao foram validados no seu executavel**.
-- A maquina de estados e a vitima marcada permanecem apenas em memoria. Nao se trata ainda do sistema definitivo.
-- Qualquer integracao com WorldFall esta desativada nesta versao.
-
-Fontes de referencia de APIs (outras versoes e outros ambientes):
-- https://github.com/WorldBoxOpenMods/ModExample/blob/master/ExampleModCode.cs
-- https://github.com/WorldBoxOpenMods/ModLoader/blob/master/api/BasicMod.cs
-- https://github.com/fullya99/worldbox-mcp/blob/main/docs/game-api-notes.md (WorldBox 0.51.2)
-
-## Creditos e licenciamento
-
-Inspirado no [SCP-096](https://scp-wiki.wikidot.com/scp-096), de **Dr Dan**. Obra derivada sob [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/). Veja `CREDITS.md` e `LICENSE.md`. Os sprites deste pacote foram criados especificamente para o projeto.
-
-## Teste de isolamento da NullReferenceException
-
-1. Em um **mundo descartavel**, rode 2D puro, sem WorldFall, com 1 SCP e 1 alvo proximo. Clique `Marcar alvo`.
-2. Anote se o erro `FirstPerson.WalkPace.Step` aparece no `Player.log`.
-3. Refaça o teste com WorldFall **ativado**, mas deixe o checkbox `Perseguir/atacar` desmarcado.
-4. Reative a perseguicao e tente de novo. Se a excecao ocorrer **apenas com o checkbox marcado**, temos forte evidencia de conflito na chamada de movimento do SCP com o hook de WorldFall.
-5. Envie as linhas com `[SCP096]`, stack de `FirstPerson` e diagnostico F9. Nao precisamos do save neste momento.
-
-Comandos do Ubuntu:
+## Logs
 
 ```bash
-find "$HOME/.config/unity3d" -iname 'Player.log' -type f 2>/dev/null
-# Substitua /CAMINHO/Player.log pelo arquivo encontrado:
-grep -nE 'SCP096|FirstPerson|checkCalibrateTargetPosition|NullReferenceException' /CAMINHO/Player.log | tail -100
+grep -nE 'SCP096|ActorAssetLibrary|Shadow size|Exception|goTo|MORTE' \
+~/.config/unity3d/mkarpenko/WorldBox/Player.log | tail -180
 ```
 
-## Limites de verificacao
+Em especial, confirme que constam `v0.1.5 alpha`, `Traits: registradas` e `Perseguicao: Actor.goTo(WorldTile,Boolean)`.
 
-Este ZIP foi montado a partir do codigo da v0.1.2, reaproveitando as versoes anteriores do projeto. Nao temos as DLLs locais do WorldBox/NML/WorldFall, portanto nao foi compilado nem testado dentro do WorldBox. Os erros visuais sao diretamente consistentes com a substituicao de textura no codigo anterior; a atribuicao de causa para o erro de movimentacao ainda e hipotese.
+## Licenciamento
 
-## Coleta de logs focada em ataque / sombras
-
-Se o SCP atingir a vitima sem mata-la, pressione F9 no painel. Envie o resultado deste comando:
-
-```bash
-LOG="$HOME/.config/unity3d/mkarpenko/WorldBox/Player.log"
-grep -nE 'SCP096|dieSimpleNone|Shadow size|Egg shadow|Baby shadow|Exception' "$LOG" | tail -140
-```
-
-O arquivo `error_*.log` mostra apenas os erros que o jogo agrupou; o `Player.log` registra tambem nossas mensagens de diagnostico. O novo log enviado tinha **apenas tres avisos de sombra**, sem a stack anterior de FirstPerson.
-
-**Limites**: ainda nao foi compilado nem executado neste ambiente por falta das DLLs e toolchain; codigo validado apenas estruturalmente.
+SCP-096 foi criado por **Dr Dan** no site SCP Wiki e está sujeito à licença Creative Commons BY-SA 3.0. Consulte `CREDITS.md` e `LICENSE.md`. As artes desta versão são recursos próprios do projeto; áudio do The Unrelenting não foi copiado.

@@ -1,8 +1,8 @@
 {
   "name": "SCP-096 The Shy Guy",
   "author": "Arvak",
-  "version": "0.1.3",
-  "description": "Alpha: confirmed-death attempt via dieSimpleNone, manual kill test and shadow diagnostics (build 719).",
+  "version": "0.1.5",
+  "description": "Experimental: goTo navigation based on The Unrelenting, witness FIFO with traits, proximity approximation and deferred death confirmation. WorldBox 0.51.2.",
   "iconPath": "icon.png",
   "ModType": "NEOMOD"
 }

@@ -13,6 +13,12 @@ namespace SCP096TheShyGuy
     internal sealed class WorldBridge
     {
         internal const string ScpId = "scp096_shyguy";
+        // Using a non-civilization source is safer than cloning a human and
+        // attempting to override the whole citizen/job AI with guessed flags.
+        private const string BaseId = "sheep";
+        internal string SourcePrototype => BaseId;
+        internal string AppearanceStatus { get; private set; } = "not attempted";
+        internal string ExtraFlagsStatus { get; private set; } = "not attempted";
         private object _actorLibrary;
         private bool _assetRegistered;
         private string _lastMoveSignature = "not discovered";
@@ -50,50 +56,135 @@ namespace SCP096TheShyGuy
                 var get = Reflect.Find(_actorLibrary, "get", p => p.Length == 1 && p[0].ParameterType == typeof(string));
                 if (get == null) { reason = "actor_library.get(string) unavailable"; return false; }
                 if (Reflect.Call(_actorLibrary, get, ScpId) != null) { _assetRegistered = true; return true; }
-                object humanAsset = Reflect.Call(_actorLibrary, get, "human");
-                if (humanAsset == null)
-                { reason = "Base actor 'human' unavailable"; return false; }
-                // clone(newId, sourceId) is present in public NML AssetLinker examples.
+                object prototype = Reflect.Call(_actorLibrary, get, BaseId);
+                if (prototype == null)
+                { reason = "Wild source asset '" + BaseId + "' not available: no human fallback (avoids cities)"; return false; }
                 var clone = Reflect.Find(_actorLibrary, "clone", p =>
                     p.Length == 2 && p[0].ParameterType == typeof(string) && p[1].ParameterType == typeof(string));
                 if (clone == null) { reason = "ActorAssetLibrary.clone(string,string) unavailable"; return false; }
-                object asset = Reflect.Call(_actorLibrary, clone, ScpId, "human");
+                object asset = Reflect.Call(_actorLibrary, clone, ScpId, BaseId);
                 if (asset == null || Convert.ToString(Reflect.Member(asset, "id")) != ScpId)
-                { reason = "ActorAsset clone returned unexpected ID; registration aborted"; return false; }
-                // Deliberately conservative. Cloning copies the human texture until texture API is inspected.
-                Reflect.Set(asset, "color_hex", "#EEEFF0");
+                { reason = "ActorAsset clone returned unexpected ID"; return false; }
                 Reflect.Set(asset, "name_locale", "scp096_shyguy");
+                Reflect.Set(asset, "color_hex", "#E5E8EB");
                 Reflect.Set(asset, "can_turn_into_zombie", false);
                 Reflect.Set(asset, "can_have_subspecies", false);
                 Reflect.Set(asset, "can_evolve_into_new_species", false);
                 Reflect.Set(asset, "damaged_by_ocean", false);
                 Reflect.Set(asset, "die_in_lava", false);
-                Reflect.Set(asset, "can_be_killed_by_life_eraser", true); // admin removal stays enabled
+                Reflect.Set(asset, "can_be_killed_by_life_eraser", true);
                 Reflect.Set(asset, "has_advanced_textures", false);
+                // Keep the sheep AI independent from human civilizations.
+                // Optional flags: not assumed to exist; recorded if the version exposes them.
+                var disabled = new List<string>();
+                foreach (string flag in new[] { "can_breed", "can_build", "can_have_city",
+                    "can_be_citizen", "is_civilization", "can_create_city", "can_settle" })
+                    if (Reflect.Set(asset, flag, false)) disabled.Add(flag);
+                ExtraFlagsStatus = disabled.Count == 0 ? "none found, wild prototype still used" :
+                    string.Join(",", disabled.ToArray());
                 SetBaseStat(asset, "health", 10000f);
                 SetBaseStat(asset, "lifespan", 10000f);
                 SetBaseStat(asset, "damage", 250f);
                 SetBaseStat(asset, "speed", 12f);
-                // v0.1.2 stability fix: keep the human texture subasset inherited by clone.
-                // Replacing it with an incomplete ActorTextureSubAsset discarded baby/head
-                // and shadow information and produced five ActorAssetLibrary warnings.
-                // Custom sprites remain in the package but are NOT bound until the
-                // exact format is confirmed against the player's DLLs.
-                object inheritedTexture = Reflect.Member(asset, "texture_asset");
-                if (inheritedTexture == null)
-                {
-                    object vanillaTexture = Reflect.Member(humanAsset, "texture_asset");
-                    if (vanillaTexture == null || !Reflect.Set(asset, "texture_asset", vanillaTexture))
-                    { reason = "The cloned actor has no usable inherited texture"; return false; }
-                }
-                // The loader may link the actor asset later; don't force a second
-                // loadTexturesAndSprites() pass with incomplete custom resources.
+                // Cloning alone retains the valid sheep textures. Custom texture loading
+                // is tried only when its resource files are present, with safe fallback.
+                ConfigureAppearance(asset, prototype, modFolder);
                 _assetRegistered = true;
                 return true;
             }
             catch (Exception ex) { reason = ex.GetBaseException().Message; return false; }
         }
 
+
+        private void ConfigureAppearance(object asset, object prototype, string root)
+        {
+            AppearanceStatus = "wild sprite inherited (custom files unavailable)";
+            if (string.IsNullOrEmpty(root) ||
+                !File.Exists(Path.Combine(root, "GameResources", "actors", ScpId, "Main", "idle_1.png")))
+                return;
+            object inherited = Reflect.Member(asset, "texture_asset") ?? Reflect.Member(prototype, "texture_asset");
+            if (inherited == null) { AppearanceStatus = "texture source missing"; return; }
+            try
+            {
+                Type textureType = Reflect.GameType("ActorTextureSubAsset");
+                var ctor = textureType == null ? null : textureType.GetConstructor(Reflect.Any,
+                    null, new[] { typeof(string), typeof(bool) }, null);
+                if (ctor == null) { AppearanceStatus = "ActorTextureSubAsset ctor missing"; return; }
+                object texture = ctor.Invoke(new object[] { "actors/" + ScpId + "/", false });
+                // The 0.1.1 attempt lost the inherited shadow, baby/head paths.
+                // Copy shadow/head/child data only, never modify the shared original.
+                foreach (var f in inherited.GetType().GetFields(Reflect.Any))
+                {
+                    string name = f.Name.ToLowerInvariant();
+                    if (!(name.Contains("shadow") || name.Contains("head") ||
+                          name.Contains("baby") || name.Contains("child") || name.Contains("egg"))) continue;
+                    try { Reflect.Set(texture, f.Name, f.GetValue(inherited)); } catch { }
+                }
+                foreach (var prop in inherited.GetType().GetProperties(Reflect.Any))
+                {
+                    string name = prop.Name.ToLowerInvariant();
+                    if (!(name.Contains("shadow") || name.Contains("head") ||
+                          name.Contains("baby") || name.Contains("child") || name.Contains("egg"))) continue;
+                    if (!prop.CanRead || prop.GetIndexParameters().Length != 0) continue;
+                    try { Reflect.Set(texture, prop.Name, prop.GetValue(inherited, null)); } catch { }
+                }
+                // Make the source path explicit (Linux is case sensitive).
+                Reflect.Set(texture, "texture_path_main", "actors/" + ScpId + "/Main");
+                // Never borrow sheep/child: the custom child folder has matching idle/swim frames.
+                Reflect.Set(texture, "texture_path_baby", "actors/" + ScpId + "/child");
+                EnsureValidShadowSizes(asset, prototype);
+                EnsureValidShadowSizes(texture, inherited);
+                if (!Reflect.Set(asset, "texture_asset", texture))
+                { AppearanceStatus = "texture assignment unavailable; inherited sprite kept"; return; }
+                Reflect.Set(asset, "animation_idle", new[] { "idle_1" });
+                Reflect.Set(asset, "animation_walk", new[] { "walk_1", "walk_2" });
+                Reflect.Set(asset, "animation_swim", new[] { "swim_0", "swim_1", "swim_2", "swim_3" });
+                var load = Reflect.Find(_actorLibrary, "loadTexturesAndSprites", p =>
+                    p.Length == 1 && p[0].ParameterType.IsInstanceOfType(asset));
+                if (load == null)
+                {
+                    Reflect.Set(asset, "texture_asset", inherited);
+                    AppearanceStatus = "loadTexturesAndSprites missing; inherited sprite kept";
+                    return;
+                }
+                try
+                {
+                    Reflect.Call(_actorLibrary, load, asset);
+                    AppearanceStatus = "custom texture attempted with inherited baby/head/shadow; verify in game";
+                }
+                catch (Exception e)
+                {
+                    Reflect.Set(asset, "texture_asset", inherited);
+                    AppearanceStatus = "custom loader error, inherited sprite restored: " + e.GetBaseException().Message;
+                }
+            }
+            catch (Exception e) { AppearanceStatus = "custom sprite setup error: " + e.GetBaseException().Message; }
+        }
+
+        // 0.51.2 rejects even (0.55,0.30): use a clearly nonzero size for this
+        // tall humanoid. The exact visual proportions still require in-game testing.
+        private static void EnsureValidShadowSizes(object target, object source)
+        {
+            if (target == null) return;
+            foreach (var field in target.GetType().GetFields(Reflect.Any))
+            {
+                string n = field.Name.ToLowerInvariant();
+                if (!n.Contains("shadow") || !n.Contains("size")) continue;
+                try
+                {
+                    object current = field.GetValue(target);
+                    if (field.FieldType == typeof(Vector2) && current is Vector2 v &&
+                        (v.x < 1.5f || v.y < 1.5f))
+                    {
+                        object old = Reflect.Member(source, field.Name);
+                        Vector2 valid = old is Vector2 ov && ov.x >= 1.5f && ov.y >= 1.5f
+                            ? ov : new Vector2(2f, 2f);
+                        field.SetValue(target, valid);
+                    }
+                }
+                catch { }
+            }
+        }
 
         internal bool SetBaseStat(object actorAsset, string name, float value)
         {
@@ -141,6 +232,16 @@ namespace SCP096TheShyGuy
         internal bool IsAlive(object actor)
         {
             if (actor == null) return false;
+            var aliveMethod = Reflect.Find(actor, "isAlive", ps => ps.Length == 0);
+            if (aliveMethod != null)
+            {
+                try
+                {
+                    object alive = Reflect.Call(actor, aliveMethod);
+                    if (alive is bool && !(bool)alive) return false;
+                }
+                catch { }
+            }
             IEnumerable living = Reflect.Enumerate(Reflect.Member(Units, "units_only_alive"));
             if (living == null) return Exists(actor); // conservative fallback on other builds
             foreach (object current in living)
@@ -243,7 +344,8 @@ namespace SCP096TheShyGuy
                 ", actor_library=" + (lib != null) +
                 ", actor clone=" + (clone == null ? "missing" : Reflect.Signature(clone)) +
                 ", spawnNewUnit=" + (spawn == null ? "missing" : Reflect.Signature(spawn)) +
-                ", assetRegistered=" + _assetRegistered;
+                ", assetRegistered=" + _assetRegistered + ", prototype=" + BaseId +
+                ", appearance=" + AppearanceStatus;
         }
 
         internal object IsolatedTile()
@@ -333,6 +435,14 @@ namespace SCP096TheShyGuy
             return best;
         }
 
+        // Search all living actors, without a radius cap, prioritizing the cursor
+        // position. This is a manual testing shortcut, not visual face detection.
+        internal object NearestVictimAnywhere(object scp)
+        {
+            object tile = MouseTile() ?? ActorTile(scp);
+            return tile == null ? null : NearestVictim(scp, tile, 1000000f);
+        }
+
         internal string TargetDistance(object a, object b)
         {
             if (!Position(a, out float ax, out float ay) || !Position(b, out float bx, out float by))
@@ -341,35 +451,76 @@ namespace SCP096TheShyGuy
             return Math.Sqrt(dx * dx + dy * dy).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + " tiles";
         }
 
+        internal float Distance(object a, object b)
+        {
+            if (!Position(a, out float ax, out float ay) ||
+                !Position(b, out float bx, out float by)) return float.MaxValue;
+            float dx = ax - bx, dy = ay - by;
+            return Mathf.Sqrt(dx * dx + dy * dy);
+        }
+
         internal bool Within(object a, object b, float distance)
         {
             if (!Position(a, out var ax, out var ay) || !Position(b, out var bx, out var by)) return false;
             return (ax - bx) * (ax - bx) + (ay - by) * (ay - by) <= distance * distance;
         }
 
-        // Uses only native movement methods discovered by signature; no Transform warp/desync.
+        // Verified in user's The Unrelenting (WorldBox 0.51.2):
+        // Actor.cancelAllBeh(); Actor.goTo(target.current_tile, false);
+        // Older ShyGuy code incorrectly only searched one-argument movement methods.
+        internal bool TryInterruptBehaviors(object scp)
+        {
+            if (scp == null) return false;
+            MethodInfo m = Reflect.Find(scp, "cancelAllBeh", ps => ps.Length == 0);
+            if (m == null) return false;
+            try { Reflect.Call(scp, m); return true; }
+            catch (Exception e)
+            {
+                _lastMoveSignature = "cancelAllBeh ERROR: " + e.GetBaseException().Message;
+                return false;
+            }
+        }
+
         internal bool TryChase(object scp, object victim)
         {
             object tile = ActorTile(victim);
             if (tile == null || scp == null) return false;
-            foreach (object receiver in new[] { scp, Reflect.Member(scp, "ai"), Reflect.Member(scp, "brain") })
+            MethodInfo goTo = Reflect.Find(scp, "goTo", ps =>
+                ps.Length == 2 && ps[0].ParameterType.IsInstanceOfType(tile) &&
+                ps[1].ParameterType == typeof(bool));
+            if (goTo != null)
             {
-                if (receiver == null) continue;
-                foreach (string name in new[] { "goTo", "goToTile", "tryGoTo", "moveTo", "setMoveTarget" })
+                try
                 {
-                    var method = Reflect.Find(receiver, name, p => p.Length == 1 && p[0].ParameterType.IsInstanceOfType(tile));
-                    if (method == null) continue;
-                    try
+                    object outcome = Reflect.Call(scp, goTo, tile, false);
+                    if (!(outcome is bool) || (bool)outcome)
                     {
-                        object outcome = Reflect.Call(receiver, method, tile);
-                        if (outcome is bool && !(bool)outcome) continue;
-                        _lastMoveSignature = receiver.GetType().Name + "." + Reflect.Signature(method);
+                        _lastMoveSignature = "Actor." + Reflect.Signature(goTo) + " (from The Unrelenting)";
                         return true;
                     }
-                    catch { /* Try the next supported signature without spamming logs. */ }
                 }
+                catch (Exception e)
+                { _lastMoveSignature = "goTo FAILED: " + e.GetBaseException().Message; }
             }
-            _lastMoveSignature = "UNRESOLVED: no confirmed native movement signature";
+            // Diagnostic compatibility fallback: no teleporting or manual mutation.
+            MethodInfo moveTo = Reflect.Find(scp, "moveTo", ps =>
+                ps.Length == 1 && ps[0].ParameterType.IsInstanceOfType(tile));
+            if (moveTo != null)
+            {
+                try
+                {
+                    object result = Reflect.Call(scp, moveTo, tile);
+                    if (!(result is bool) || (bool)result)
+                    {
+                        _lastMoveSignature = "Actor." + Reflect.Signature(moveTo) + " (fallback)";
+                        return true;
+                    }
+                }
+                catch (Exception e)
+                { _lastMoveSignature = "moveTo FAILED: " + e.GetBaseException().Message; }
+            }
+            if (_lastMoveSignature == "not discovered")
+                _lastMoveSignature = "UNRESOLVED: no supported movement call";
             return false;
         }
 
@@ -410,11 +561,63 @@ namespace SCP096TheShyGuy
             }
             if (!IsAlive(victim))
             {
-                _lastKillSignature = signature + " -> vitima saiu do registro vivo (confirmado)";
+                _lastKillSignature = signature + " -> morte confirmada imediatamente";
                 return true;
             }
-            _lastKillSignature = signature + " invocado; vitima ainda consta no registro vivo";
+            // WorldBox updates the living registry later in the simulation tick.
+            // Invocation succeeded; do not label an asynchronous removal as failure.
+            _lastKillSignature = signature + " solicitado; aguardando verificacao de morte no proximo tick";
+            return true;
+        }
+
+
+        // Trait mutations mirror The Unrelenting's version-safe overload matching.
+        internal bool HasTrait(object actor, string id)
+        {
+            if (actor == null) return false;
+            var method = Reflect.Find(actor, "hasTrait", ps =>
+                ps.Length == 1 && ps[0].ParameterType == typeof(string));
+            if (method == null) return false;
+            try { return Reflect.Call(actor, method, id) is bool b && b; }
+            catch { return false; }
+        }
+
+        internal bool MutateTrait(object actor, string methodName, string id)
+        {
+            if (actor == null) return false;
+            foreach (MethodInfo method in actor.GetType().GetMethods(Reflect.Any))
+            {
+                if (method.Name != methodName) continue;
+                var ps = method.GetParameters();
+                if (ps.Length < 1 || ps[0].ParameterType != typeof(string)) continue;
+                object[] args = new object[ps.Length];
+                args[0] = id;
+                bool supported = true;
+                for (int i = 1; i < args.Length; i++)
+                {
+                    if (ps[i].HasDefaultValue && ps[i].DefaultValue != DBNull.Value &&
+                        ps[i].DefaultValue != Type.Missing) args[i] = ps[i].DefaultValue;
+                    else if (ps[i].ParameterType == typeof(bool)) args[i] = false;
+                    else if (ps[i].ParameterType.IsValueType)
+                        args[i] = Activator.CreateInstance(ps[i].ParameterType);
+                    else supported = false;
+                }
+                if (!supported) continue;
+                try { Reflect.Call(actor, method, args); return true; }
+                catch { }
+            }
             return false;
+        }
+
+        internal bool AddTrait(object actor, string id)
+        {
+            if (HasTrait(actor, id)) return true;
+            return MutateTrait(actor, "addTrait", id) && HasTrait(actor, id);
+        }
+        internal bool RemoveTrait(object actor, string id)
+        {
+            if (!HasTrait(actor, id)) return true;
+            return MutateTrait(actor, "removeTrait", id) && !HasTrait(actor, id);
         }
 
         internal string DiagnosticShadows()
@@ -422,9 +625,9 @@ namespace SCP096TheShyGuy
             if (_actorLibrary == null) return "Actor library unavailable";
             MethodInfo get = Reflect.Find(_actorLibrary, "get", p => p.Length == 1 && p[0].ParameterType == typeof(string));
             if (get == null) return "Actor get(string) unavailable";
-            object human = Reflect.Call(_actorLibrary, get, "human");
             object scp = Reflect.Call(_actorLibrary, get, ScpId);
-            return "SCP shadows: " + ShadowInfo(scp) + " | humano: " + ShadowInfo(human);
+            object prototype = Reflect.Call(_actorLibrary, get, BaseId);
+            return "SCP shadows: " + ShadowInfo(scp) + " | wild source: " + ShadowInfo(prototype);
         }
 
         private static string ShadowInfo(object asset)
