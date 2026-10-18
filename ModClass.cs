@@ -24,6 +24,9 @@ namespace SCP096TheShyGuy
         private bool _progressInitialized;
         private bool _stuckWarningSent;
         private bool _attackWarningSent;
+        private float _attackRetryAt;
+        private int _attackAttempts;
+        private const int MaxAttackAttempts = 3;
         private bool _initialized;
         private bool _showPanel = true;
         private bool _placeOnMap;
@@ -35,7 +38,7 @@ namespace SCP096TheShyGuy
         private float _attackDistance = 1.7f;
         private bool _debugLogs = true;
 
-        private Rect PanelRect => new Rect(Mathf.Max(4, Screen.width - 352), 72, 345, 432);
+        private Rect PanelRect => new Rect(Mathf.Max(4, Screen.width - 352), 72, 345, 478);
 
         protected override void OnModLoad()
         {
@@ -51,7 +54,7 @@ namespace SCP096TheShyGuy
                 Log("Registro pendente: " + reason + " (tentaremos novamente ao gerar).");
             }
             _initialized = true;
-            Log("v0.1.2 alpha: texturas herdadas estabilizadas; painel F5; F6 spawn; F7 alvo; F8 cancelar; F9 diagnostico.");
+            Log("v0.1.3 alpha: teste de morte dieSimpleNone(); F5 painel; F6 spawn; F7 alvo; F8 cancelar; F9 diagnostico.");
         }
 
         private void Update()
@@ -97,7 +100,11 @@ namespace SCP096TheShyGuy
                     _movementMethodLogged = false;
                     ResetChaseProgress(now);
                 }
-                if (_victim != null && !_world.Exists(_victim)) _victim = null;
+                if (_victim != null && !_world.IsAlive(_victim))
+                {
+                    Log("Vitima nao esta mais viva; encerrando alvo.");
+                    _victim = null;
+                }
             }
             if (_scp == null) return;
             ShyGuyState before = _brain.State;
@@ -112,15 +119,23 @@ namespace SCP096TheShyGuy
             {
                 if (_world.Within(_scp, _victim, _attackDistance))
                 {
-                    if (_world.TryKill(_victim))
+                    if (now >= _attackRetryAt && _attackAttempts < MaxAttackAttempts)
                     {
-                        Log("Alvo alcancado: metodo nativo de morte " + _world.LastKillSignature);
-                        _victim = null;
-                    }
-                    else if (!_attackWarningSent)
-                    {
-                        Log("Ataque nao confirmado: " + _world.LastKillSignature);
-                        _attackWarningSent = true;
+                        _attackRetryAt = now + 2f;
+                        _attackAttempts++;
+                        if (_world.TryKill(_victim))
+                        {
+                            Log("EXECUCAO CONFIRMADA: " + _world.LastKillSignature);
+                            _victim = null;
+                        }
+                        else if (!_attackWarningSent)
+                        {
+                            Log("Ataque tentativa " + _attackAttempts + ": " + _world.LastKillSignature);
+                            _attackWarningSent = true;
+                        }
+                        else if (_attackAttempts >= MaxAttackAttempts)
+                            Log("ATAQUE INTERROMPIDO apos 3 tentativas: " + _world.LastKillSignature +
+                                ". Use F9 e envie Player.log.");
                     }
                 }
                 else
@@ -155,6 +170,9 @@ namespace SCP096TheShyGuy
             _progressInitialized = false;
             _stuckWarningSent = false;
             _lastProgressAt = now;
+            _attackRetryAt = 0;
+            _attackAttempts = 0;
+            _attackWarningSent = false;
         }
 
         private void TrackChaseProgress(float now)
@@ -203,7 +221,7 @@ namespace SCP096TheShyGuy
                 return;
             }
 
-            GUI.Box(r, "SCP-096 - THE SHY GUY  |  v0.1.2");
+            GUI.Box(r, "SCP-096 - THE SHY GUY  |  v0.1.3");
             float x = r.x + 12, y = r.y + 30;
             GUI.Label(new Rect(x, y, 315, 23), "Mapa: " + _world.Readiness);
             y += 24;
@@ -241,6 +259,8 @@ namespace SCP096TheShyGuy
             if (GUI.Button(new Rect(x, y, 153, 29), "Teste: humano")) SpawnTestHuman();
             if (GUI.Button(new Rect(x + 161, y, 158, 29), "Diagnostico [F9]")) Diagnostic();
             y += 37;
+            if (GUI.Button(new Rect(x, y, 319, 29), "Teste: eliminar alvo selecionado (manual)")) TestKillVictim();
+            y += 36;
             GUI.Label(new Rect(x, y, 319, 20), "Resultado da ultima acao:");
             y += 21;
             GUIStyle feedbackStyle = new GUIStyle(GUI.skin.label);
@@ -332,6 +352,25 @@ namespace SCP096TheShyGuy
             Log("Alvo marcado. Estado=" + _brain.State + "; preparacao=" + _triggerDelay + "s.");
         }
 
+        private void TestKillVictim()
+        {
+            if (!_world.HasMap || _victim == null || !_world.IsAlive(_victim))
+            {
+                Log("Teste de morte: marque primeiro uma vitima viva com F7.");
+                return;
+            }
+            // Explicit debug-only action: unlike RAGE, ignores target distance.
+            // NEVER use in a non-disposable world; this intentionally kills one NPC.
+            if (_world.TryKill(_victim))
+            {
+                Log("TESTE DE MORTE OK: " + _world.LastKillSignature);
+                _victim = null;
+                ResetChaseProgress(Time.unscaledTime);
+            }
+            else
+                Log("TESTE DE MORTE FALHOU: " + _world.LastKillSignature);
+        }
+
         private void CancelTarget()
         {
             _victim = null;
@@ -347,6 +386,8 @@ namespace SCP096TheShyGuy
                 ", chaseEnabled=" + _enableChase + ", lastMove=" + _world.LastMoveSignature +
                 ", distancia=" + _world.TargetDistance(_scp, _victim));
             Log(_world.DiagnosticMethods(_scp));
+            Log(_world.DiagnosticShadows());
+            Log("Ultimo ataque=" + _world.LastKillSignature + ", tentativas=" + _attackAttempts);
             _status = "Diagnostico gravado em Player.log. " + details;
         }
 

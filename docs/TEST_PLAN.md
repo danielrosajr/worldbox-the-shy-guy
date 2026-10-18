@@ -1,3 +1,14 @@
+# TESTES ESPECIFICOS v0.1.3
+
+1. Em um mundo de teste, gere um SCP e um humano.
+2. Posicione cursor no humano, aperte F7 e confira `Alvo: N tiles`.
+3. Sem esperar a perseguicao, clique `Teste: eliminar alvo selecionado (manual)`.
+4. Esperado: alvo deixa de estar vivo, painel mostra `TESTE DE MORTE OK: Actor.dieSimpleNone()`; se nao, registra metodo ausente ou excecao.
+5. Depois gere outro humano, marque F7, espere TRIGGERED→RAGE e aproxime. A morte automatica deve acontecer no alcance configurado (1.7 tiles).
+6. Se o alvo nao morrer, pressione F9 para registrar assinatura real e campos de sombra.
+7. Repita opcionalmente com WorldFall, comparando erros `FirstPerson` e FPS.
+8. Nunca use o teste de morte em um mundo importante.
+
 # Plano de teste da v0.1.2 alpha
 
 ## Antes de testar

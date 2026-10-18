@@ -127,12 +127,25 @@ namespace SCP096TheShyGuy
         // The bundled sprites are preview assets, not a complete atlas with
         // valid adult/child/heads and shadow definitions.
 
+        // Prefer the verified living-unit registry when exposed by this WorldBox build.
+        // This avoids selecting dead characters as witnesses during manual tests.
         internal IEnumerable<object> Actors()
         {
-            IEnumerable units = Reflect.Enumerate(Units);
+            IEnumerable units = Reflect.Enumerate(Reflect.Member(Units, "units_only_alive"))
+                ?? Reflect.Enumerate(Units);
             if (units == null) yield break;
             foreach (object actor in units)
                 if (actor != null) yield return actor;
+        }
+
+        internal bool IsAlive(object actor)
+        {
+            if (actor == null) return false;
+            IEnumerable living = Reflect.Enumerate(Reflect.Member(Units, "units_only_alive"));
+            if (living == null) return Exists(actor); // conservative fallback on other builds
+            foreach (object current in living)
+                if (ReferenceEquals(current, actor)) return true;
+            return false;
         }
 
         internal string AssetId(object actor)
@@ -360,25 +373,78 @@ namespace SCP096TheShyGuy
             return false;
         }
 
+        // WorldBox 0.51.2 build 719: dieSimpleNone() has public third-party
+        // runtime lifecycle evidence. Unlike speculative zero-argument die(),
+        // it has been observed to remove the actor from units_only_alive and city.
+        // We require confirmation from the live registry, not just Invoke() success.
         internal bool TryKill(object victim)
         {
-            if (victim == null) return false;
-            // Death goes through Actor's own lifecycle only; never writes zero HP blindly.
-            foreach (string name in new[] { "killHimself", "die" })
+            if (victim == null) { _lastKillSignature = "sem vitima"; return false; }
+            if (!IsAlive(victim))
             {
-                var method = Reflect.Find(victim, name, p => p.Length == 0);
-                if (method == null) continue;
-                try
-                {
-                    object result = Reflect.Call(victim, method);
-                    if (result is bool && !(bool)result) continue;
-                    _lastKillSignature = Reflect.Signature(method);
-                    return true;
-                }
-                catch { }
+                _lastKillSignature = "vitima ja ausente das unidades vivas";
+                return true;
             }
-            _lastKillSignature = "UNRESOLVED: no safe zero-argument Actor death method";
+
+            MethodInfo method = Reflect.Find(victim, "dieSimpleNone", p => p.Length == 0);
+            if (method == null)
+            {
+                _lastKillSignature = "INDISPONIVEL: Actor.dieSimpleNone() nao encontrado";
+                return false;
+            }
+            string signature = victim.GetType().Name + "." + Reflect.Signature(method);
+            try
+            {
+                object outcome = Reflect.Call(victim, method);
+                if (outcome is bool && !(bool)outcome)
+                {
+                    _lastKillSignature = signature + " retornou false";
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                _lastKillSignature = signature + " ERRO: " + ex.GetBaseException().GetType().Name
+                    + ": " + ex.GetBaseException().Message;
+                return false;
+            }
+            if (!IsAlive(victim))
+            {
+                _lastKillSignature = signature + " -> vitima saiu do registro vivo (confirmado)";
+                return true;
+            }
+            _lastKillSignature = signature + " invocado; vitima ainda consta no registro vivo";
             return false;
+        }
+
+        internal string DiagnosticShadows()
+        {
+            if (_actorLibrary == null) return "Actor library unavailable";
+            MethodInfo get = Reflect.Find(_actorLibrary, "get", p => p.Length == 1 && p[0].ParameterType == typeof(string));
+            if (get == null) return "Actor get(string) unavailable";
+            object human = Reflect.Call(_actorLibrary, get, "human");
+            object scp = Reflect.Call(_actorLibrary, get, ScpId);
+            return "SCP shadows: " + ShadowInfo(scp) + " | humano: " + ShadowInfo(human);
+        }
+
+        private static string ShadowInfo(object asset)
+        {
+            if (asset == null) return "not found";
+            List<string> fields = new List<string>();
+            foreach (object target in new[] { asset, Reflect.Member(asset, "texture_asset") })
+            {
+                if (target == null) continue;
+                string prefix = ReferenceEquals(target, asset) ? "asset." : "texture.";
+                foreach (FieldInfo field in target.GetType().GetFields(Reflect.Any))
+                {
+                    if (field.Name.IndexOf("shadow", StringComparison.OrdinalIgnoreCase) < 0) continue;
+                    try { fields.Add(prefix + field.Name + "=" + Convert.ToString(field.GetValue(target))); }
+                    catch { }
+                    if (fields.Count >= 24) break;
+                }
+                if (fields.Count >= 24) break;
+            }
+            return fields.Count == 0 ? "no shadow members found" : string.Join(", ", fields.ToArray());
         }
 
         internal string DiagnosticMethods(object actor)

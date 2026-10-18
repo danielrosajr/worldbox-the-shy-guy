@@ -1,3 +1,13 @@
+# CHANGELOG
+
+## 0.1.3-alpha — 18/10/2026
+- Troca tentativa especulativa `die()`/`killHimself()` por `Actor.dieSimpleNone()` (evidencia externa, WorldBox 0.51.2 build 719).
+- Confere registro `units_only_alive` antes/depois da chamada: nao considera sucesso somente por reflexao sem excecao.
+- Adiciona teste de morte manual separado da perseguicao.
+- Limita a tres tentativas de morte por alvo, com 2s de espacamento e logs claros.
+- Diagnostico F9 de campos de sombra do asset SCP e humano. Avisos ainda nao corrigidos.
+- Nenhuma mudanca no algoritmo de navegacao; perseguição permanece experimental.
+
 # Changelog
 
 ## 0.1.2-alpha — diagnostico de movimento e estabilidade visual
