@@ -1,0 +1,22 @@
+{
+  "scp096_shyguy": "SCP-096",
+  "trait_group_ArvakSCP096": "SCP-096",
+  "ArvakSCP096_Witness": "SCP-096 Witness",
+  "ArvakSCP096_Witness_info": "Saw SCP-096's face (experimental proximity approximation)",
+  "ArvakSCP096_RageSpeed": "SCP-096 Rage",
+  "ArvakSCP096_RageSpeed_info": "Temporary speed boost during pursuit",
+  "SCP096": "SCP-096 Settings",
+  "TriggerDelay": "Preparation time (seconds)",
+  "CalmingDelay": "Calming time (seconds)",
+  "TickSeconds": "Simulation tick (seconds)",
+  "AttackDistance": "Attack range (tiles)",
+  "ProximityWitnesses": "Nearby actors become witnesses (experimental)",
+  "ProximityDistance": "Witness radius in tiles",
+  "ProximityScanSeconds": "Seconds between local witness scans",
+  "MaxWitnesses": "Maximum witness queue size",
+  "DebugLogs": "Diagnostic logs",
+  "trait_ArvakSCP096_Witness": "Testemunha do SCP-096",
+  "trait_ArvakSCP096_Witness_info": "Esta criatura foi marcada como testemunha do SCP-096 e entrou na fila de vítimas. Nesta versão, a marcação é manual ou por proximidade; ainda não detecta o rosto.",
+  "trait_ArvakSCP096_RageSpeed": "Fúria do SCP-096",
+  "trait_ArvakSCP096_RageSpeed_info": "Bônus temporário de velocidade durante a perseguição às vítimas marcadas."
+}

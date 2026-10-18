@@ -14,5 +14,9 @@
   "ProximityDistance": "Witness radius in tiles",
   "ProximityScanSeconds": "Seconds between local witness scans",
   "MaxWitnesses": "Maximum witness queue size",
-  "DebugLogs": "Diagnostic logs"
+  "DebugLogs": "Diagnostic logs",
+  "trait_ArvakSCP096_Witness": "SCP-096 Witness",
+  "trait_ArvakSCP096_Witness_info": "This creature was marked as a witness to SCP-096. It is queued as a target. This alpha uses manual or proximity triggers, not actual face detection.",
+  "trait_ArvakSCP096_RageSpeed": "SCP-096 Rage",
+  "trait_ArvakSCP096_RageSpeed_info": "Temporary speed bonus while SCP-096 pursues its marked victims."
 }

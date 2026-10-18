@@ -7,7 +7,7 @@ import struct
 root = Path(__file__).resolve().parents[1]
 manifest = json.loads((root / 'mod.json').read_text())
 config = json.loads((root / 'default_config.json').read_text())
-assert manifest['version'] == '0.1.5'
+assert manifest['version'] == '0.1.6'
 assert manifest['name'] == 'SCP-096 The Shy Guy'
 assert 'SCP096' in config and all(x['Id'] for x in config['SCP096'])
 for f in ['ModClass.cs', 'src/WorldBridge.cs', 'src/Reflect.cs', 'src/StateMachine.cs', 'src/WitnessQueue.cs', 'src/Traits.cs']:
@@ -42,3 +42,12 @@ assert 'Perseguir e eliminar' in (root / 'ModClass.cs').read_text()
 for f in ['README.md', 'CHANGELOG.md', 'LICENSE.md', 'CREDITS.md','docs/TEST_PLAN.md']:
     assert (root / f).stat().st_size > 80
 print('PASS: JSON, source braces, PNG files, documentation. NOT a game/runtime test.')
+
+# Regression check for trait menu labels. The game expects trait_<ID> and trait_<ID>_info.
+for lang in ('en', 'pt_BR', 'pt'):
+    loc = json.loads((root / 'Locales' / (lang + '.json')).read_text(encoding='utf-8'))
+    for trait in ('ArvakSCP096_Witness', 'ArvakSCP096_RageSpeed'):
+        assert loc.get('trait_' + trait), (lang, trait, 'name missing')
+        assert loc.get('trait_' + trait + '_info'), (lang, trait, 'info missing')
+assert 'distancia no ataque=' in (root / 'ModClass.cs').read_text()
+print('PASS: trait localizations and attack-range diagnostics.')

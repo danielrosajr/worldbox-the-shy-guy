@@ -1,8 +1,8 @@
 {
   "name": "SCP-096 The Shy Guy",
   "author": "Arvak",
-  "version": "0.1.5",
-  "description": "Experimental: goTo navigation based on The Unrelenting, witness FIFO with traits, proximity approximation and deferred death confirmation. WorldBox 0.51.2.",
+  "version": "0.1.6",
+  "description": "Fix missing Witness/RageSpeed trait translations; keep v0.1.5 gameplay, log distance at each automatic execution. WorldBox 0.51.2.",
   "iconPath": "icon.png",
   "ModType": "NEOMOD"
 }

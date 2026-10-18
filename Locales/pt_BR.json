@@ -14,5 +14,9 @@
   "ProximityDistance": "Witness radius in tiles",
   "ProximityScanSeconds": "Seconds between local witness scans",
   "MaxWitnesses": "Maximum witness queue size",
-  "DebugLogs": "Diagnostic logs"
+  "DebugLogs": "Diagnostic logs",
+  "trait_ArvakSCP096_Witness": "Testemunha do SCP-096",
+  "trait_ArvakSCP096_Witness_info": "Esta criatura foi marcada como testemunha do SCP-096 e entrou na fila de vítimas. Nesta versão, a marcação é manual ou por proximidade; ainda não detecta o rosto.",
+  "trait_ArvakSCP096_RageSpeed": "Fúria do SCP-096",
+  "trait_ArvakSCP096_RageSpeed_info": "Bônus temporário de velocidade durante a perseguição às vítimas marcadas."
 }

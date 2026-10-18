@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## 0.1.6-alpha — 18/10/2026
+- Corrige erros `LocalizedTextManager: missing text: trait_ArvakSCP096_Witness` e `trait_ArvakSCP096_RageSpeed`, adicionando IDs corretos de nome e descricao.
+- Adiciona traducao brasileira e `Locales/pt.json`, usando convencao ja comprovada no The Unrelenting.
+- Inclui no log a distancia ao executar cada ataque automatico, para distinguir perseguicao real de morte remota.
+- Mantem as mecanicas da v0.1.5 sem alteracoes, incluindo a selecao, fila de alvos e regras de alcance.
+- Validacao estrutural apenas; pacote nao compilado/testado no WorldBox desta sessao.
+
+
 ## 0.1.5-alpha — 18/10/2026
 - Reaproveita do The Unrelenting o padrão `Actor.cancelAllBeh()` + `Actor.goTo(WorldTile, false)` e intervalos adaptativos de navegação.
 - Adiciona `ArvakSCP096_Witness`, trait `ArvakSCP096_RageSpeed` (+85 speed) e fila FIFO de testemunhas com máximo configurável.

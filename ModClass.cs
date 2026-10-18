@@ -8,7 +8,7 @@ namespace SCP096TheShyGuy
 {
     public sealed class ModClass : BasicMod<ModClass>
     {
-        private const string Version = "0.1.5";
+        private const string Version = "0.1.6";
         private const int MaxAttackAttempts = 3;
         private WorldBridge _world;
         private ShyGuyBrain _brain;
@@ -151,7 +151,7 @@ namespace SCP096TheShyGuy
                         _killPending = _world.TryKill(_victim);
                         if (_killPending) _lastIssuedVictim = _victim;
                         Log((_killPending ? "EXECUCAO SOLICITADA" : "ATAQUE NAO ENVIADO") +
-                            " tentativa=" + _attackAttempts + ": " + _world.LastKillSignature);
+                            " tentativa=" + _attackAttempts + "; distancia no ataque=" + _world.TargetDistance(_scp, _victim) + "; alcance=" + _attackDistance.ToString("0.0", CultureInfo.InvariantCulture) + " tiles; " + _world.LastKillSignature);
                     }
                     else if (_killPending && now >= _attackRetryAt)
                     {

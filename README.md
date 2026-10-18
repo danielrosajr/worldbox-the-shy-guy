@@ -1,8 +1,15 @@
-# SCP-096: The Shy Guy — v0.1.5-alpha
+# SCP-096: The Shy Guy — v0.1.6-alpha
 
 **Alvo: WorldBox 0.51.2, build 719 + NeoModLoader em Ubuntu.**
 
 Código experimental preparado a partir de `SCP096 v0.1.4` e da análise do ZIP **The Unrelenting** fornecido pelo usuário. Esta entrega **não foi compilada com Assembly-CSharp.dll nem testada dentro do WorldBox**. Use apenas mundos descartáveis e faça backup de saves importantes.
+
+## O que mudou na v0.1.6
+
+- Corrigidas as chaves de localizacao das traits `trait_ArvakSCP096_Witness` e `trait_ArvakSCP096_RageSpeed` (com textos de descricao `_info`).
+- Inclusos `Locales/en.json`, `Locales/pt_BR.json` e `Locales/pt.json`, seguindo o mesmo formato de chaves usado pelo The Unrelenting.
+- O log de **ataques automaticos** agora registra a distancia real na hora da execucao e o alcance configurado. O botao de teste de morte segue funcionando sem alcance por definicao.
+- Nenhuma alteracao na IA, fila FIFO, trait de velocidade, mecanismo de morte ou assets. A v0.1.5 foi testada pelo usuario e apresentou apenas avisos de localizacao no ultimo relatorio.
 
 ## O que mudou na v0.1.5
 
@@ -42,7 +49,7 @@ Foram adicionados `swim_0` a `swim_3` para **Main** e **child**, reutilizando os
    `~/.steam/debian-installation/steamapps/common/worldbox/Mods`
 3. **Mova todas as pastas anteriores de SCP096 para fora da pasta Mods.** Não altere o The Unrelenting ou WorldFall.
 4. Extraia este ZIP para a pasta `Mods`, ficando:
-   `Mods/SCP096-TheShyGuy-0.1.5/mod.json`.
+   `Mods/SCP096-TheShyGuy-0.1.6/mod.json`.
 5. Abra o jogo e use um **mundo pequeno e descartável**. Confirme no painel a versão `v0.1.5`.
 
 ## Controles
