@@ -1,3 +1,15 @@
+# Changelog
+
+## 0.1.2-alpha — diagnostico de movimento e estabilidade visual
+
+- Corrigido o codigo responsavel pelos avisos de sprites baby/child e sombras 0x0: o novo ator nao substitui mais o `texture_asset` herdado do humano por um asset incompleto.
+- Sprites SCP seguem disponiveis no pacote, mas desabilitados temporariamente no jogo ate validar carregamento 2D completo. O ator pode aparecer com visual de humano por enquanto.
+- Painel agora mostra distancia ao alvo em tiles.
+- Adicionado controle para suspender perseguição/ataque sem desinstalar o mod, permitindo diagnosticar erro possivelmente relacionado a `FirstPerson`.
+- Reenvio de comandos de perseguição reduzido de 0,75s para 1,5s; emite aviso se o SCP ficar parado durante RAGE, sem teleportes de risco.
+- Preservada geracao manual e fluxo original de estados.
+- Nao corrigido: `NullReferenceException` em `FirstPerson.WalkPace.Step`, cuja causa requer teste de isolamento/assemblies.
+
 # CHANGELOG
 
 ## v0.1.1-alpha — Diagnostico de geracao e painel visivel (2026-10-18)

@@ -16,6 +16,13 @@ namespace SCP096TheShyGuy
         private float _scanAt;
         private float _chaseAt;
         private bool _movementWarningSent;
+        private bool _movementMethodLogged;
+        private bool _enableChase = true;
+        private float _lastProgressAt;
+        private float _lastProgressX;
+        private float _lastProgressY;
+        private bool _progressInitialized;
+        private bool _stuckWarningSent;
         private bool _attackWarningSent;
         private bool _initialized;
         private bool _showPanel = true;
@@ -28,7 +35,7 @@ namespace SCP096TheShyGuy
         private float _attackDistance = 1.7f;
         private bool _debugLogs = true;
 
-        private Rect PanelRect => new Rect(Mathf.Max(4, Screen.width - 352), 72, 345, 365);
+        private Rect PanelRect => new Rect(Mathf.Max(4, Screen.width - 352), 72, 345, 432);
 
         protected override void OnModLoad()
         {
@@ -44,7 +51,7 @@ namespace SCP096TheShyGuy
                 Log("Registro pendente: " + reason + " (tentaremos novamente ao gerar).");
             }
             _initialized = true;
-            Log("v0.1.1 alpha carregado. Painel SCP-096 no canto direito. F5 painel; F6 visivel; Shift+F6 isolado; F7 alvo; F8 cancelar; F9 diagnostico.");
+            Log("v0.1.2 alpha: texturas herdadas estabilizadas; painel F5; F6 spawn; F7 alvo; F8 cancelar; F9 diagnostico.");
         }
 
         private void Update()
@@ -75,6 +82,7 @@ namespace SCP096TheShyGuy
                 _brain.Reset(now);
                 _scanAt = 0;
                 _placeOnMap = false;
+                ResetChaseProgress(now);
             }
             if (now >= _scanAt)
             {
@@ -86,6 +94,8 @@ namespace SCP096TheShyGuy
                     _brain.Reset(now);
                     _movementWarningSent = false;
                     _attackWarningSent = false;
+                    _movementMethodLogged = false;
+                    ResetChaseProgress(now);
                 }
                 if (_victim != null && !_world.Exists(_victim)) _victim = null;
             }
@@ -96,8 +106,9 @@ namespace SCP096TheShyGuy
             {
                 Log("Estado: " + before + " -> " + _brain.State + " (" + _brain.LastReason + ")");
                 _world.TrySetSpeed(_brain.State == ShyGuyState.Rage ? 100f : 12f);
+                if (_brain.State == ShyGuyState.Rage) ResetChaseProgress(now);
             }
-            if (_brain.State == ShyGuyState.Rage && _victim != null)
+            if (_brain.State == ShyGuyState.Rage && _victim != null && _enableChase)
             {
                 if (_world.Within(_scp, _victim, _attackDistance))
                 {
@@ -112,15 +123,65 @@ namespace SCP096TheShyGuy
                         _attackWarningSent = true;
                     }
                 }
-                else if (now >= _chaseAt)
+                else
                 {
-                    _chaseAt = now + 0.75f;
-                    if (!_world.TryChase(_scp, _victim) && !_movementWarningSent)
+                    TrackChaseProgress(now);
+                    if (now >= _chaseAt)
                     {
-                        Log("Perseguicao nao confirmada: " + _world.LastMoveSignature);
-                        _movementWarningSent = true;
+                        // Avoid repeatedly resetting a live path on every sub-second tick.
+                        _chaseAt = now + 1.5f;
+                        if (!_world.TryChase(_scp, _victim))
+                        {
+                            if (!_movementWarningSent)
+                            {
+                                Log("Perseguicao nao confirmada: " + _world.LastMoveSignature);
+                                _movementWarningSent = true;
+                            }
+                        }
+                        else if (!_movementMethodLogged)
+                        {
+                            _movementMethodLogged = true;
+                            Log("Perseguicao enviada por " + _world.LastMoveSignature +
+                                ". Isto nao garante deslocamento real; observe a distancia no painel.");
+                        }
                     }
                 }
+            }
+        }
+
+        private void ResetChaseProgress(float now)
+        {
+            _chaseAt = 0f;
+            _progressInitialized = false;
+            _stuckWarningSent = false;
+            _lastProgressAt = now;
+        }
+
+        private void TrackChaseProgress(float now)
+        {
+            if (!_world.Position(_scp, out float x, out float y)) return;
+            if (!_progressInitialized)
+            {
+                _lastProgressX = x;
+                _lastProgressY = y;
+                _lastProgressAt = now;
+                _progressInitialized = true;
+                return;
+            }
+            float dx = x - _lastProgressX;
+            float dy = y - _lastProgressY;
+            if (dx * dx + dy * dy >= 0.75f * 0.75f)
+            {
+                _lastProgressX = x;
+                _lastProgressY = y;
+                _lastProgressAt = now;
+                _stuckWarningSent = false;
+            }
+            else if (!_stuckWarningSent && now - _lastProgressAt > 8f)
+            {
+                // Diagnostic only: do not teleport or edit actor position directly.
+                Log("AVISO: SCP parado ha mais de 8s durante RAGE. Metodo=" + _world.LastMoveSignature);
+                _stuckWarningSent = true;
             }
         }
 
@@ -142,7 +203,7 @@ namespace SCP096TheShyGuy
                 return;
             }
 
-            GUI.Box(r, "SCP-096 - THE SHY GUY  |  v0.1.1");
+            GUI.Box(r, "SCP-096 - THE SHY GUY  |  v0.1.2");
             float x = r.x + 12, y = r.y + 30;
             GUI.Label(new Rect(x, y, 315, 23), "Mapa: " + _world.Readiness);
             y += 24;
@@ -151,6 +212,18 @@ namespace SCP096TheShyGuy
             y += 24;
             GUI.Label(new Rect(x, y, 315, 23), "Criatura: " + (_scp != null ? "encontrada" : "nao encontrada") +
                 "  |  Estado: " + _brain.State);
+            y += 24;
+            GUI.Label(new Rect(x, y, 319, 22), "Alvo: " + (_victim == null ? "nenhum" : _world.TargetDistance(_scp, _victim)));
+            y += 22;
+            bool enableChase = GUI.Toggle(new Rect(x, y, 315, 22), _enableChase,
+                "Perseguir/atacar (desmarcar p/ teste)");
+            if (enableChase != _enableChase)
+            {
+                _enableChase = enableChase;
+                ResetChaseProgress(Time.unscaledTime);
+                Log(_enableChase ? "Perseguicao habilitada." :
+                    "Perseguicao e ataque do SCP suspensos para teste de compatibilidade.");
+            }
             y += 28;
             if (GUI.Button(new Rect(x, y, 153, 32), "Gerar aqui [F6]")) Spawn(false);
             if (GUI.Button(new Rect(x + 161, y, 158, 32), "Gerar isolado")) Spawn(true);
@@ -225,7 +298,8 @@ namespace SCP096TheShyGuy
             _scp = actor;
             _victim = null;
             _brain.Reset(Time.unscaledTime);
-            _movementWarningSent = _attackWarningSent = false;
+            _movementWarningSent = _attackWarningSent = _movementMethodLogged = false;
+            ResetChaseProgress(Time.unscaledTime);
             Log("SCP-096 criado em " + _world.TileCoordinates(tile) +
                 ". Visual pode aparecer como humano ate validarmos as texturas.");
         }
@@ -251,6 +325,8 @@ namespace SCP096TheShyGuy
             if (victim == null) victim = _world.NearestVictim(_scp, _world.ActorTile(_scp), 70f);
             if (victim == null) { Log("Nenhum personagem encontrado perto do cursor ou SCP."); return; }
             _victim = victim;
+            ResetChaseProgress(now);
+            _movementMethodLogged = false;
             if (_brain.State == ShyGuyState.Docile || _brain.State == ShyGuyState.Calming)
                 _brain.Transition(ShyGuyState.Triggered, now, "testemunha marcada manualmente");
             Log("Alvo marcado. Estado=" + _brain.State + "; preparacao=" + _triggerDelay + "s.");
@@ -259,6 +335,7 @@ namespace SCP096TheShyGuy
         private void CancelTarget()
         {
             _victim = null;
+            ResetChaseProgress(Time.unscaledTime);
             Log("Alvo removido. SCP voltara a DOCILE pelo ciclo normal.");
         }
 
@@ -266,7 +343,9 @@ namespace SCP096TheShyGuy
         {
             string details = _world.DiagnosticReadiness();
             Log("Diagnostico: " + details);
-            Log("Estado=" + _brain.State + ", SCP=" + (_scp != null) + ", alvo=" + (_victim != null));
+            Log("Estado=" + _brain.State + ", SCP=" + (_scp != null) + ", alvo=" + (_victim != null) +
+                ", chaseEnabled=" + _enableChase + ", lastMove=" + _world.LastMoveSignature +
+                ", distancia=" + _world.TargetDistance(_scp, _victim));
             Log(_world.DiagnosticMethods(_scp));
             _status = "Diagnostico gravado em Player.log. " + details;
         }

@@ -50,7 +50,8 @@ namespace SCP096TheShyGuy
                 var get = Reflect.Find(_actorLibrary, "get", p => p.Length == 1 && p[0].ParameterType == typeof(string));
                 if (get == null) { reason = "actor_library.get(string) unavailable"; return false; }
                 if (Reflect.Call(_actorLibrary, get, ScpId) != null) { _assetRegistered = true; return true; }
-                if (Reflect.Call(_actorLibrary, get, "human") == null)
+                object humanAsset = Reflect.Call(_actorLibrary, get, "human");
+                if (humanAsset == null)
                 { reason = "Base actor 'human' unavailable"; return false; }
                 // clone(newId, sourceId) is present in public NML AssetLinker examples.
                 var clone = Reflect.Find(_actorLibrary, "clone", p =>
@@ -73,7 +74,20 @@ namespace SCP096TheShyGuy
                 SetBaseStat(asset, "lifespan", 10000f);
                 SetBaseStat(asset, "damage", 250f);
                 SetBaseStat(asset, "speed", 12f);
-                SetupCustomTexture(asset, modFolder);
+                // v0.1.2 stability fix: keep the human texture subasset inherited by clone.
+                // Replacing it with an incomplete ActorTextureSubAsset discarded baby/head
+                // and shadow information and produced five ActorAssetLibrary warnings.
+                // Custom sprites remain in the package but are NOT bound until the
+                // exact format is confirmed against the player's DLLs.
+                object inheritedTexture = Reflect.Member(asset, "texture_asset");
+                if (inheritedTexture == null)
+                {
+                    object vanillaTexture = Reflect.Member(humanAsset, "texture_asset");
+                    if (vanillaTexture == null || !Reflect.Set(asset, "texture_asset", vanillaTexture))
+                    { reason = "The cloned actor has no usable inherited texture"; return false; }
+                }
+                // The loader may link the actor asset later; don't force a second
+                // loadTexturesAndSprites() pass with incomplete custom resources.
                 _assetRegistered = true;
                 return true;
             }
@@ -109,42 +123,9 @@ namespace SCP096TheShyGuy
             return asset != null && SetBaseStat(asset, "speed", speed);
         }
 
-        private void SetupCustomTexture(object asset, string root)
-        {
-            if (string.IsNullOrEmpty(root)) return;
-            string spriteFile = Path.Combine(root, "GameResources", "actors", ScpId, "Main", "idle_1.png");
-            if (!File.Exists(spriteFile)) return;
-            try
-            {
-                // A cached icon is helpful even if the build does not load the full custom atlas.
-                Texture2D tex = new Texture2D(32, 48, TextureFormat.RGBA32, false);
-                var type = Type.GetType("UnityEngine.ImageConversion, UnityEngine.ImageConversionModule");
-                var loader = type == null ? null : type.GetMethods(Reflect.Any)
-                    .FirstOrDefault(m => m.Name == "LoadImage" && m.GetParameters().Length == 3);
-                if (loader != null)
-                {
-                    bool ok = Convert.ToBoolean(loader.Invoke(null, new object[] { tex, File.ReadAllBytes(spriteFile), false }));
-                    if (ok)
-                    {
-                        tex.filterMode = FilterMode.Point;
-                        var sprite = Sprite.Create(tex, new Rect(0, 0, 32, 48), new Vector2(0.5f, 0f), 32f);
-                        Reflect.Set(asset, "_cached_sprite", sprite);
-                    }
-                }
-                Type subType = Reflect.GameType("ActorTextureSubAsset");
-                if (subType == null) return;
-                var constructor = subType.GetConstructor(Reflect.Any, null, new[] { typeof(string), typeof(bool) }, null);
-                if (constructor == null) return;
-                object textures = constructor.Invoke(new object[] { "actors/" + ScpId + "/", false });
-                if (!Reflect.Set(asset, "texture_asset", textures)) return;
-                Reflect.Set(asset, "animation_idle", new[] { "idle_1" });
-                Reflect.Set(asset, "animation_walk", new[] { "walk_1", "walk_2" });
-                var loadSprites = Reflect.Find(_actorLibrary, "loadTexturesAndSprites", p =>
-                    p.Length == 1 && p[0].ParameterType.IsInstanceOfType(asset));
-                if (loadSprites != null) Reflect.Call(_actorLibrary, loadSprites, asset);
-            }
-            catch (Exception ex) { Debug.LogWarning("[SCP096] Custom texture fallback: " + ex.GetBaseException().Message); }
-        }
+        // Custom texture binding intentionally disabled in v0.1.2.
+        // The bundled sprites are preview assets, not a complete atlas with
+        // valid adult/child/heads and shadow definitions.
 
         internal IEnumerable<object> Actors()
         {
@@ -337,6 +318,14 @@ namespace SCP096TheShyGuy
                 if (distance < score) { best = actor; score = distance; }
             }
             return best;
+        }
+
+        internal string TargetDistance(object a, object b)
+        {
+            if (!Position(a, out float ax, out float ay) || !Position(b, out float bx, out float by))
+                return "indisponivel";
+            double dx = ax - bx, dy = ay - by;
+            return Math.Sqrt(dx * dx + dy * dy).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + " tiles";
         }
 
         internal bool Within(object a, object b, float distance)

@@ -7,7 +7,7 @@ import struct
 root = Path(__file__).resolve().parents[1]
 manifest = json.loads((root / 'mod.json').read_text())
 config = json.loads((root / 'default_config.json').read_text())
-assert manifest['version'] == '0.1.1'
+assert manifest['version'] == '0.1.2'
 assert manifest['name'] == 'SCP-096 The Shy Guy'
 assert 'SCP096' in config and all(x['Id'] for x in config['SCP096'])
 for f in ['ModClass.cs', 'src/WorldBridge.cs', 'src/Reflect.cs', 'src/StateMachine.cs']:
@@ -22,6 +22,9 @@ for f in ['icon.png', 'Assets/Sprites/scp096_preview.png',
 assert 'private void OnGUI()' in (root / 'ModClass.cs').read_text()
 assert 'SpawnOnClickedTile' in (root / 'ModClass.cs').read_text()
 assert 'SpawnTestHuman' in (root / 'src/WorldBridge.cs').read_text()
+assert 'SetupCustomTexture(asset, modFolder)' not in (root / 'src/WorldBridge.cs').read_text()
+assert 'ResetChaseProgress' in (root / 'ModClass.cs').read_text()
+assert 'Perseguir/atacar' in (root / 'ModClass.cs').read_text()
 for f in ['README.md', 'CHANGELOG.md', 'LICENSE.md', 'CREDITS.md','docs/TEST_PLAN.md']:
     assert (root / f).stat().st_size > 80
 print('PASS: JSON, source braces, PNG files, documentation. NOT a game/runtime test.')
