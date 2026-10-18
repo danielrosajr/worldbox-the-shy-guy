@@ -1,0 +1,9 @@
+{
+  "scp096_shyguy": "SCP-096",
+  "SCP096": "SCP-096 Settings",
+  "TriggerDelay": "Preparation time (seconds)",
+  "CalmingDelay": "Calming time (seconds)",
+  "TickSeconds": "Simulation tick (seconds)",
+  "AttackDistance": "Attack range (tiles)",
+  "DebugLogs": "Diagnostic logs"
+}

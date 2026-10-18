@@ -1,0 +1,8 @@
+{
+  "name": "SCP-096 The Shy Guy",
+  "author": "Arvak",
+  "version": "0.1.1",
+  "description": "Alpha diagnostic fix: visible control panel, click-to-place spawn and runtime diagnostics.",
+  "iconPath": "icon.png",
+  "ModType": "NEOMOD"
+}

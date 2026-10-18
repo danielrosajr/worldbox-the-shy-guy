@@ -1,0 +1,9 @@
+{
+  "SCP096": [
+    {"Id": "TriggerDelay", "Type": "TEXT", "TextVal": "8"},
+    {"Id": "CalmingDelay", "Type": "TEXT", "TextVal": "4"},
+    {"Id": "TickSeconds", "Type": "TEXT", "TextVal": "0.30"},
+    {"Id": "AttackDistance", "Type": "TEXT", "TextVal": "1.7"},
+    {"Id": "DebugLogs", "Type": "SWITCH", "BoolVal": true}
+  ]
+}
