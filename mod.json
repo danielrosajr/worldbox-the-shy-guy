@@ -1,8 +1,8 @@
 {
   "name": "SCP-096 The Shy Guy",
   "author": "Arvak",
-  "version": "0.2.8",
-  "description": "High-priority WorldFall trigger/death overlay; sustained player-only BGM mute and safe volume restoration; FMOD audio and chase preserved.",
+  "version": "0.2.9",
+  "description": "RAGE target-scoped speed ramp, strong-but-mortal health regen, and WorldFall 3D last-pass flash diagnostic.",
   "iconPath": "icon.png",
   "ModType": "NEOMOD"
 }

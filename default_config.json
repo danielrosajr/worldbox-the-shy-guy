@@ -36,6 +36,26 @@
       "TextVal": "0.60"
     },
     {
+      "Id": "RegenerationEnabled",
+      "Type": "SWITCH",
+      "BoolVal": true
+    },
+    {
+      "Id": "DocileRegenPerSecond",
+      "Type": "TEXT",
+      "TextVal": "700"
+    },
+    {
+      "Id": "RageRegenPerSecond",
+      "Type": "TEXT",
+      "TextVal": "2000"
+    },
+    {
+      "Id": "RageRampSeconds",
+      "Type": "TEXT",
+      "TextVal": "45"
+    },
+    {
       "Id": "CalmingDelay",
       "Type": "TEXT",
       "TextVal": "4"

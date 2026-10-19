@@ -65,5 +65,19 @@
   "MusicFadeUpSeconds": "Tempo para restaurar música original (segundos)",
   "MusicFadeUpSeconds Description": "O volume original é preservado e restaurado quando o SCP encerra a perseguição.",
   "MusicDuckingPercent": "Redução da música original (%)",
-  "MusicDuckingPercent Description": "100% para silêncio da trilha, sem silenciar ambiente ou sons da criatura."
+  "MusicDuckingPercent Description": "100% para silêncio da trilha, sem silenciar ambiente ou sons da criatura.",
+  "RegenerationEnabled": "Regeneração de vida do SCP-096",
+  "DocileRegenPerSecond": "Cura por segundo em DOCILE",
+  "RageRegenPerSecond": "Cura por segundo em TRIGGERED e RAGE",
+  "RageRampSeconds": "Segundos até velocidade máxima durante perseguição",
+  "RegenerationEnabled Description": "Regeneração gradual. SCP continua mortal contra dano extremamente alto.",
+  "DocileRegenPerSecond Description": "Pontos de saúde restaurados a cada segundo, fora da perseguição.",
+  "RageRegenPerSecond Description": "Pontos de saúde restaurados por segundo enquanto provocado ou furioso.",
+  "RageRampSeconds Description": "Por vítima, acelera gradualmente por quatro estágios. Não acumula com a fila.",
+  "trait_ArvakSCP096_RageSpeed2": "Fúria acelerada do SCP-096",
+  "trait_ArvakSCP096_RageSpeed2_info": "Estágio temporário de velocidade que não se acumula com os demais.",
+  "trait_ArvakSCP096_RageSpeed3": "Fúria acelerada do SCP-096",
+  "trait_ArvakSCP096_RageSpeed3_info": "Estágio temporário de velocidade que não se acumula com os demais.",
+  "trait_ArvakSCP096_RageSpeed4": "Fúria acelerada do SCP-096",
+  "trait_ArvakSCP096_RageSpeed4_info": "Estágio temporário de velocidade que não se acumula com os demais."
 }

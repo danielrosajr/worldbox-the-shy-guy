@@ -72,6 +72,8 @@ namespace SCP096TheShyGuy
                 Reflect.Set(asset, "can_evolve_into_new_species", false);
                 Reflect.Set(asset, "damaged_by_ocean", false);
                 Reflect.Set(asset, "die_in_lava", false);
+                // Avoid instant environmental erasure but permit death from sustained damage.
+                // No invulnerable/immortal trait is applied.
                 Reflect.Set(asset, "can_be_killed_by_life_eraser", true);
                 Reflect.Set(asset, "has_advanced_textures", false);
                 // Keep the sheep AI independent from human civilizations.
@@ -82,7 +84,7 @@ namespace SCP096TheShyGuy
                     if (Reflect.Set(asset, flag, false)) disabled.Add(flag);
                 ExtraFlagsStatus = disabled.Count == 0 ? "none found, wild prototype still used" :
                     string.Join(",", disabled.ToArray());
-                SetBaseStat(asset, "health", 10000f);
+                SetBaseStat(asset, "health", 40000f);
                 SetBaseStat(asset, "lifespan", 10000f);
                 SetBaseStat(asset, "damage", 250f);
                 SetBaseStat(asset, "speed", 12f);
@@ -203,6 +205,47 @@ namespace SCP096TheShyGuy
             }
             catch { }
             return false;
+        }
+
+        private MethodInfo _restoreHealthMethod;
+        private bool _healMethodSearched;
+        private bool _healFailureLogged;
+        internal bool TryRegenerate(object actor, int amount, out string detail)
+        {
+            detail = "not attempted";
+            if (actor == null || !IsAlive(actor) || amount <= 0) return false;
+            try
+            {
+                if (!_healMethodSearched)
+                {
+                    _healMethodSearched = true;
+                    _restoreHealthMethod = Reflect.Find(actor, "restoreHealth", ps =>
+                        ps.Length == 1 && ps[0].ParameterType == typeof(int));
+                }
+                if (_restoreHealthMethod == null)
+                {
+                    detail = "Actor.restoreHealth(Int32) unavailable";
+                    return false;
+                }
+                // Avoid repeatedly invoking health regen at full health if game exposes ratio.
+                MethodInfo ratioMethod = Reflect.Find(actor, "getHealthRatio", ps => ps.Length == 0);
+                if (ratioMethod != null)
+                {
+                    object raw = Reflect.Call(actor, ratioMethod);
+                    float ratio = Convert.ToSingle(raw);
+                    if (!float.IsNaN(ratio) && ratio >= .999f)
+                    { detail = "full health"; return true; }
+                }
+                Reflect.Call(actor, _restoreHealthMethod, amount);
+                detail = "Actor.restoreHealth(Int32) amount=" + amount;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                detail = ex.GetBaseException().GetType().Name + ": " + ex.GetBaseException().Message;
+                if (!_healFailureLogged) { _healFailureLogged = true; }
+                return false;
+            }
         }
 
         internal bool TrySetSpeed(float speed)

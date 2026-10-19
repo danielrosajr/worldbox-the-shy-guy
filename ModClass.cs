@@ -8,7 +8,7 @@ namespace SCP096TheShyGuy
 {
     public sealed class ModClass : BasicMod<ModClass>
     {
-        private const string Version = "0.2.8";
+        private const string Version = "0.2.9";
         private const int MaxAttackAttempts = 3;
         private WorldBridge _world;
         private WorldfallSight _worldfallSight;
@@ -42,6 +42,13 @@ namespace SCP096TheShyGuy
         private bool _enableChase = true;
         private bool _enableProximity = true;
         private bool _traitsRegistered, _rageTraitApplied;
+        private int _rageSpeedStage = -1;
+        private float _rageTargetStartedAt;
+        private float _rageRampSeconds = 45f;
+        private bool _regenerationEnabled = true;
+        private float _regenerationAt, _rageRegenPerSecond = 2000f, _docileRegenPerSecond = 700f;
+        private bool _regenDiagnosticPrinted;
+        private string _lastRegenDetail = "not checked";
         private bool _killPending;
         private int _attackAttempts, _killsConfirmed;
         private bool _initialized, _showPanel = true, _placeOnMap, _selectRemote;
@@ -112,7 +119,7 @@ namespace SCP096TheShyGuy
                 if (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift))
                 {
                     if (_overlay != null && _audio != null)
-                        _overlay.Show(_audio.FlashDuration, _audio.FlashOpacity, "preview SHIFT+F10 durante WorldFall");
+                        _overlay.Show(_audio.FlashDuration, _audio.FlashOpacity, "preview SHIFT+F10 durante WorldFall", true);
                 }
                 else Log("CAPTURA F10 (durante jogo): " + _worldfallSight.DetailedSnapshot(_world, _scp));
             }
@@ -156,6 +163,9 @@ namespace SCP096TheShyGuy
                 _brain.Reset(now);
                 _scanAt = _proximityScanAt = _fullWitnessScanAt = 0f;
                 _rageTraitApplied = false;
+                _rageSpeedStage = -1;
+                _regenerationAt = 0f;
+                _regenDiagnosticPrinted = false;
                 _placeOnMap = _selectRemote = false;
                 ResetChaseProgress(now);
                 _worldfallSight.Reset();
@@ -178,12 +188,31 @@ namespace SCP096TheShyGuy
                     _testMusicOverride = false;
                     _cooldownUntil = 0f;
                     _rageTraitApplied = false;
+                    _rageSpeedStage = -1;
+                    _regenerationAt = 0f;
+                    _regenDiagnosticPrinted = false;
                     ResetChaseProgress(now);
                     if (_scp != null && _traitsRegistered)
-                        _world.RemoveTrait(_scp, ShyGuyTraits.RageId);
+                        ShyGuyTraits.ClearRage(_world, _scp);
                 }
             }
             if (_scp == null) return;
+
+            // Repeated gradual healing. Not immortality: lethal damage can still kill
+            // before the next 1-second recovery tick, including extreme environmental damage.
+            if (_regenerationEnabled && now >= _regenerationAt)
+            {
+                _regenerationAt = now + 1f;
+                int heal = Mathf.RoundToInt(_brain.State == ShyGuyState.Rage ||
+                    _brain.State == ShyGuyState.Triggered ? _rageRegenPerSecond : _docileRegenPerSecond);
+                bool success = _world.TryRegenerate(_scp, heal, out _lastRegenDetail);
+                if (!_regenDiagnosticPrinted)
+                {
+                    _regenDiagnosticPrinted = true;
+                    Log("REGEN: " + (success ? "metodo disponivel" : "indisponivel") +
+                        " -> " + _lastRegenDetail);
+                }
+            }
 
             // Safe third-person detection: it never guesses actor/model coordinates.
             // No confirmed Worldfall-owned actor/camera/model => no witness registered.
@@ -222,15 +251,17 @@ namespace SCP096TheShyGuy
                 }
                 if (_brain.State == ShyGuyState.Rage)
                 {
-                    _rageTraitApplied = _traitsRegistered && _world.AddTrait(_scp, ShyGuyTraits.RageId);
-                    if (!_rageTraitApplied) Log("AVISO: bonus de velocidade da trait Rage nao foi aplicado");
                     ResetChaseProgress(now);
+                    _rageTraitApplied = _traitsRegistered && ShyGuyTraits.SetRageStage(_world, _scp, 0);
+                    _rageSpeedStage = _rageTraitApplied ? 0 : -1;
+                    if (!_rageTraitApplied) Log("AVISO: bonus de velocidade da trait Rage nao foi aplicado");
                     _world.TryInterruptBehaviors(_scp);
                 }
                 else if (before == ShyGuyState.Rage)
                 {
-                    if (_traitsRegistered) _world.RemoveTrait(_scp, ShyGuyTraits.RageId);
+                    if (_traitsRegistered) ShyGuyTraits.ClearRage(_world, _scp);
                     _rageTraitApplied = false;
+                    _rageSpeedStage = -1;
                     _world.TryInterruptBehaviors(_scp);
                 }
             }
@@ -246,6 +277,25 @@ namespace SCP096TheShyGuy
 
             if (_brain.State == ShyGuyState.Rage && _victim != null && _enableChase)
             {
+                // Four discrete speed stages; no stacking. The timer resets on
+                // every new FIFO target, so many victims never mean infinite speed.
+                if (_traitsRegistered && _rageRampSeconds > 0f)
+                {
+                    int stage = Mathf.Clamp(Mathf.FloorToInt(
+                        (now - _rageTargetStartedAt) / (_rageRampSeconds / 3f)), 0, 3);
+                    if (stage != _rageSpeedStage)
+                    {
+                        bool applied = ShyGuyTraits.SetRageStage(_world, _scp, stage);
+                        if (applied)
+                        {
+                            _rageSpeedStage = stage;
+                            _rageTraitApplied = true;
+                            Log("RAGE ACCEL: vitima atual estagio=" + stage + "/3; bonus speed=" +
+                                new int[] { 85, 105, 125, 145 }[stage] + " (nao acumulativo)");
+                        }
+                        else Log("RAGE ACCEL: nao foi possivel aplicar estagio " + stage);
+                    }
+                }
                 if (_world.Within(_scp, _victim, _attackDistance))
                 {
                     if (!_killPending && now >= _attackRetryAt && _attackAttempts < MaxAttackAttempts)
@@ -404,7 +454,7 @@ namespace SCP096TheShyGuy
                 if ((playerWitness || mapWitness) && _overlay != null && _audio.VisualCueEnabled)
                     _overlay.Show(_audio.FlashDuration,
                         playerWitness ? _audio.FlashOpacity : Mathf.Min(.42f, _audio.FlashOpacity),
-                        playerWitness ? "rosto visto pelo jogador WorldFall" : "proximidade 2D");
+                        playerWitness ? "rosto visto pelo jogador WorldFall" : "proximidade 2D", playerWitness);
             }
         }
 
@@ -444,7 +494,7 @@ namespace SCP096TheShyGuy
             _pendingLocalDeath = null;
             if (_deathFlashEnabled && _overlay != null)
                 _overlay.Show(_deathFlashDuration, Mathf.Max(.55f, _audio == null ? .55f : _audio.FlashOpacity),
-                    "morte confirmada causada pelo SCP");
+                    "morte confirmada causada pelo SCP", true);
             // Player is no longer alive. Restore music, while allowing the death flash.
             _localThreatActor = null;
             if (_music != null) _music.Request(false);
@@ -458,6 +508,16 @@ namespace SCP096TheShyGuy
             _attackAttempts = 0;
             _attackRetryAt = 0f;
             _lastProgressAt = now;
+            _rageTargetStartedAt = now;
+            _rageSpeedStage = -1;
+            // Already in rage and changing target: immediately drop speed back
+            // to stage zero rather than inheriting accumulated momentum.
+            if (_brain.State == ShyGuyState.Rage && _scp != null && _traitsRegistered)
+            {
+                _rageTraitApplied = ShyGuyTraits.SetRageStage(_world, _scp, 0);
+                _rageSpeedStage = _rageTraitApplied ? 0 : -1;
+                Log("RAGE ACCEL: novo alvo; velocidade voltou ao estagio 0");
+            }
         }
         private void TrackChaseProgress(float now)
         {
@@ -496,7 +556,8 @@ namespace SCP096TheShyGuy
         {
             if (!_initialized) return;
             if (_music != null) _music.Tick(Time.unscaledTime, Time.unscaledDeltaTime);
-            if (_overlay != null) _overlay.LateUpdate();
+            if (_overlay != null) _overlay.LateUpdate(
+                _worldfallSight != null && _worldfallSight.Is3DWorldfallView);
         }
         private void OnDisable()
         {
@@ -731,7 +792,8 @@ namespace SCP096TheShyGuy
             Log("DIAGNOSTICO v" + Version + ": " + _world.DiagnosticReadiness());
             Log("SCP=" + (_scp != null) + " state=" + _brain.State + " fila=" + _queue.Count +
                 " traits=" + _traitsRegistered + " rageTrait=" + _rageTraitApplied +
-                " proximidade=" + _enableProximity + " distancia=" + _world.TargetDistance(_scp, _victim));
+                " proximidade=" + _enableProximity + " distancia=" + _world.TargetDistance(_scp, _victim) +
+                " rageStage=" + _rageSpeedStage + " regen=" + _lastRegenDetail);
             Log(_world.DiagnosticMethods(_scp));
             Log(_world.DiagnosticShadows());
             Log("Ultimo movimento=" + _world.LastMoveSignature + " ultima execucao=" + _world.LastKillSignature);
@@ -746,6 +808,11 @@ namespace SCP096TheShyGuy
             try
             {
                 _triggerDelay = ConfigFloat("TriggerDelay", 55f, 10f, 120f);
+                _rageRampSeconds = ConfigFloatOptional("RageRampSeconds", 45f, 9f, 240f);
+                _rageRegenPerSecond = ConfigFloatOptional("RageRegenPerSecond", 2000f, 0f, 10000f);
+                _docileRegenPerSecond = ConfigFloatOptional("DocileRegenPerSecond", 700f, 0f, 5000f);
+                try { object v = GetConfig()["SCP096"]["RegenerationEnabled"].GetValue();
+                    if (v is bool) _regenerationEnabled = (bool)v; } catch { }
                 _cooldownSeconds = ConfigFloat("DocileCooldownSeconds", 15f, 0f, 120f);
                 _volume = ConfigFloat("SoundVolume", .7f, 0f, 1f);
                 _flashDuration = ConfigFloatOptional("FaceFlashDuration", 1.65f, .4f, 3.5f);

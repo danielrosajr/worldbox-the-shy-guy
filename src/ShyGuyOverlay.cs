@@ -7,6 +7,18 @@ namespace SCP096TheShyGuy
     // ScreenSpaceOverlay sits above the WorldFall 3D renderer. The RawImage is
     // only enabled for SCP-096 witness/death events (or an explicit F5 preview).
     // OnGUI remains a safe fallback if UnityEngine.UI is not loadable by NML.
+    // Last-pass IMGUI for WorldFall's own 3D presentation. The Canvas works in
+    // map mode but was observed behind the FirstPerson renderer in v0.2.8.
+    [DefaultExecutionOrder(32000)]
+    internal sealed class ShyGuyOverlayLateGui : MonoBehaviour
+    {
+        internal ShyGuyOverlay Owner;
+        private void OnGUI()
+        {
+            if (Owner != null) Owner.DrawWorldfallLastPass();
+        }
+    }
+
     internal sealed class ShyGuyOverlay
     {
         private readonly Action<string> _log;
@@ -18,10 +30,14 @@ namespace SCP096TheShyGuy
         private PropertyInfo _color;
         private float _startAt = -1000f, _duration = 1.35f, _opacity = .45f;
         private bool _triedCanvas, _reportedUiFailure;
+        private bool _worldfallMode, _preferWorldfall;
+        private int _lastPassFrames;
+        private bool _lastPassLogged;
         internal bool Enabled = true;
         internal bool IsActive => _image != null && Enabled && Time.unscaledTime < _startAt + _duration;
         internal string Status => "canvas=" + (_root != null) + " active=" + IsActive +
-            " texture=" + (_image != null);
+            " texture=" + (_image != null) + " worldfall=" + _worldfallMode +
+            " lateGuiFrames=" + _lastPassFrames;
 
         internal ShyGuyOverlay(Texture2D image, Action<string> log)
         {
@@ -56,6 +72,8 @@ namespace SCP096TheShyGuy
                 canvas.GetProperty("sortingOrder").SetValue(canvasObj, 32767, null);
                 PropertyInfo sorting = canvas.GetProperty("overrideSorting");
                 if (sorting != null) sorting.SetValue(canvasObj, true, null);
+                ShyGuyOverlayLateGui top = root.AddComponent<ShyGuyOverlayLateGui>();
+                top.Owner = this;
                 GameObject image = new GameObject("SCP096_WitnessFace", new Type[] { rectType });
                 image.transform.SetParent(root.transform, false);
                 _raw = image.AddComponent(rawType);
@@ -89,15 +107,19 @@ namespace SCP096TheShyGuy
                 return false;
             }
         }
-        internal void Show(float duration, float opacity, string cause)
+        internal void Show(float duration, float opacity, string cause, bool fromWorldfall = false)
         {
             if (!Enabled || _image == null) return;
             _startAt = Time.unscaledTime;
+            _preferWorldfall = fromWorldfall;
+            _lastPassFrames = 0;
+            _lastPassLogged = false;
             _duration = Mathf.Clamp(duration, .35f, 6f);
             _opacity = Mathf.Clamp(opacity, .05f, .85f);
             bool canvas = EnsureCanvas();
             if (canvas) _root.SetActive(true);
             _log("FLASH SCP096 EXIBIDO: cause=" + cause + " canvas=" + canvas +
+                 " worldfallPresentation=" + fromWorldfall +
                  " duration=" + _duration.ToString("0.00") + " opacity=" + _opacity.ToString("0.00"));
         }
         private float Fade()
@@ -117,8 +139,9 @@ namespace SCP096TheShyGuy
             _sizeDelta.SetValue(_imageRect, new Vector2(w, h), null);
             if (_anchoredPosition != null) _anchoredPosition.SetValue(_imageRect, Vector2.zero, null);
         }
-        internal void LateUpdate()
+        internal void LateUpdate(bool worldfall3D)
         {
+            _worldfallMode = worldfall3D || (_preferWorldfall && IsActive);
             if (_root == null) return;
             if (!IsActive)
             {
@@ -134,6 +157,28 @@ namespace SCP096TheShyGuy
                     _color.SetValue(_raw, new Color(1f, 1f, 1f, _opacity * Fade()), null);
             }
             catch (Exception ex) { _log("FLASH CANVAS update: " + ex.GetType().Name); }
+        }
+        internal void DrawWorldfallLastPass()
+        {
+            // Don't draw a second image in map mode. WorldFall's render target
+            // might overlap regular Canvas layers; this owns the last IMGUI pass.
+            if (!_worldfallMode || !IsActive || Event.current.type != EventType.Repaint) return;
+            int previousDepth = GUI.depth;
+            Color previousColor = GUI.color;
+            try
+            {
+                GUI.depth = -32767;
+                GUI.color = new Color(1f, 1f, 1f, _opacity * Fade());
+                GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height),
+                    _image, ScaleMode.ScaleAndCrop, true);
+                _lastPassFrames++;
+                if (!_lastPassLogged)
+                {
+                    _lastPassLogged = true;
+                    _log("FLASH 3D LATE GUI: primeiro frame desenhado em WorldFall (ainda requer confirmacao visual)");
+                }
+            }
+            finally { GUI.color = previousColor; GUI.depth = previousDepth; }
         }
         internal void OnGUIFallback()
         {
@@ -152,6 +197,7 @@ namespace SCP096TheShyGuy
         internal void Reset()
         {
             _startAt = -1000f;
+            _worldfallMode = _preferWorldfall = false;
             if (_root != null) _root.SetActive(false);
         }
         internal void Destroy()

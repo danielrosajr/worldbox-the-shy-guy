@@ -65,5 +65,19 @@
   "MusicFadeUpSeconds": "Soundtrack fade-in time (seconds)",
   "MusicFadeUpSeconds Description": "Original music volume is restored after the chase.",
   "MusicDuckingPercent": "Game music reduction (%)",
-  "MusicDuckingPercent Description": "100% removes BGM without muting environmental sounds."
+  "MusicDuckingPercent Description": "100% removes BGM without muting environmental sounds.",
+  "RegenerationEnabled": "SCP-096 health regeneration",
+  "DocileRegenPerSecond": "Health points per second in DOCILE",
+  "RageRegenPerSecond": "Health points per second in TRIGGERED and RAGE",
+  "RageRampSeconds": "Seconds to top speed for each pursuit",
+  "RegenerationEnabled Description": "Gradual recovery. The SCP can still be killed by overwhelming damage.",
+  "DocileRegenPerSecond Description": "Health points restored per second outside pursuit.",
+  "RageRegenPerSecond Description": "Health points restored per second while triggered or raging.",
+  "RageRampSeconds Description": "Per-target capped four-stage acceleration. No stacking across victims.",
+  "trait_ArvakSCP096_RageSpeed2": "SCP-096 Accelerated Rage",
+  "trait_ArvakSCP096_RageSpeed2_info": "A temporary, mutually exclusive speed stage during pursuit.",
+  "trait_ArvakSCP096_RageSpeed3": "SCP-096 Accelerated Rage",
+  "trait_ArvakSCP096_RageSpeed3_info": "A temporary, mutually exclusive speed stage during pursuit.",
+  "trait_ArvakSCP096_RageSpeed4": "SCP-096 Accelerated Rage",
+  "trait_ArvakSCP096_RageSpeed4_info": "A temporary, mutually exclusive speed stage during pursuit."
 }
