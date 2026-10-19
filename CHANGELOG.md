@@ -1,30 +1,16 @@
 # Changelog
 
-## v0.2.6-alpha — FMOD audio fix
-- Corrige silencio: substitui AudioClip.Create/SetData da Unity pelo Core FMOD ja presente no WorldBox.
-- Torna streaming a leitura dos cinco WAVs e registra erros nativos por arquivo/canal.
-- Corrige grito global inicial para tocar uma so vez; mantem grito local em loop depois.
-- Adiciona botoes de teste de cue/musica no painel F5.
-- Flash com fade-in, hold e fade-out, opacidade/duracao ajustaveis.
-- Adiciona traducoes e descricoes para todas as configuracoes do mod.
-- Preserva movimentacao, morte, fila, cooldown e deteccao de olhar no WorldFall 3D.
-- Aviso: codigo nao compilado/testado no runtime do usuario nesta entrega.
+## 0.2.8-alpha — WorldFall overlay and music state fix
+- feat: `ShyGuyOverlay` ScreenSpaceOverlay RawImage at sortingOrder 32767, persistent across WorldFall transitions, with fading and IMGUI fallback.
+- feat: visual witness flash when the controlled WorldFall actor sees SCP-096, plus death overlay only on a confirmed SCP kill of that actor.
+- fix: replaced the old flash-timer-based music muting with a state-aware `DynamicMusicController`.
+- fix: capture and restore original `bus:/Music` volume (and clearly identified Unity music sources), without touching global Master/SFX.
+- feat: 2.8s fade out, 3.5s fade in, config keys and controls; preserve silence throughout TRIGGERED and RAGE for the affected player.
+- feat: F5 preview buttons and Shift+F10 / Shift+F11 hotkeys available in WorldFall 3D.
+- chore: separate personal media testing from code-only publication.
+- regression: pursuit, FIFO queue, kill range, automatic WorldFall gaze and global/local FMOD cues unchanged.
+- status: source and package static checks only; NML compilation and 3D runtime verification pending.
 
-# Changelog
-
-## 0.2.5-alpha — The Scream
-
-- feat: áudio local de choro, grito em loop, execução, música global e grito inicial global.
-- feat: `ShyGuyAudio` desacoplado da lógica de perseguição (o mod funciona sem WAVs).
-- feat: TRIGGERED de 48 segundos com música de 44 segundos agendada 4 segundos após o gatilho.
-- feat: cooldown de 15 segundos após CALMING → DOCILE, sem reiniciar quando novas testemunhas entram em RAGE.
-- feat: tela de aviso fugaz para testemunha controlada no WorldFall, desativável; aviso 2D somente quando evento ocorre com SCP em tela.
-- fix: marcação de NPCs por proximidade continua ativa no WorldFall, mas não marca automaticamente o personagem possuído.
-- feat: configuração para volume, áudio, flash e cooldown.
-- chore: pacote publicável sem mídia de terceiros e pacote separado de teste pessoal a partir de uploads do usuário.
-
-**Status:** somente validação estrutural; requer compilação e testes no WorldBox 0.51.2.
-
-## 0.2.4-alpha — WorldFall Look
-
-Preservação da detecção de rosto via `get_Picked`, Heading e permanência do olhar; perseguição e fila FIFO testadas pelo usuário.
+## 0.2.7-alpha — Timing and mix prototype
+- Triggered preparation length set to preserve audio timing and rage scream localized.
+- The original music-override lifetime was tied to a finite flash timer (fixed in 0.2.8).

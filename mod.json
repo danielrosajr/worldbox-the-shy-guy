@@ -1,8 +1,8 @@
 {
   "name": "SCP-096 The Shy Guy",
   "author": "Arvak",
-  "version": "0.2.6",
-  "description": "FMOD native audio hotfix, 2D/global audio, smooth flash fade, missing setting localizations; WorldFall gaze and chase preserved.",
+  "version": "0.2.8",
+  "description": "High-priority WorldFall trigger/death overlay; sustained player-only BGM mute and safe volume restoration; FMOD audio and chase preserved.",
   "iconPath": "icon.png",
   "ModType": "NEOMOD"
 }

@@ -53,5 +53,17 @@
   "ProximityDistance Description": "Configuração do comportamento do SCP-096.",
   "ProximityScanSeconds Description": "Configuração do comportamento do SCP-096.",
   "MaxWitnesses Description": "Configuração do comportamento do SCP-096.",
-  "DebugLogs Description": "Configuração do comportamento do SCP-096."
+  "DebugLogs Description": "Configuração do comportamento do SCP-096.",
+  "DeathFlashDuration": "Duração do flash após morte pelo SCP (segundos)",
+  "DeathFlashEnabled": "Flash quando o SCP mata o jogador possuído",
+  "DeathFlashDuration Description": "Duração da imagem após o SCP eliminar o personagem controlado.",
+  "DeathFlashEnabled Description": "Ativar apenas na morte causada pelo SCP-096, sem alterar mortes normais.",
+  "MusicOverrideEnabled": "Silenciar música do jogo quando jogador é a vítima",
+  "MusicOverrideEnabled Description": "Não altera efeitos sonoros nem a música personalizada do SCP.",
+  "MusicFadeDownSeconds": "Tempo para silenciar música original (segundos)",
+  "MusicFadeDownSeconds Description": "Apenas o volume da trilha musical é reduzido.",
+  "MusicFadeUpSeconds": "Tempo para restaurar música original (segundos)",
+  "MusicFadeUpSeconds Description": "O volume original é preservado e restaurado quando o SCP encerra a perseguição.",
+  "MusicDuckingPercent": "Redução da música original (%)",
+  "MusicDuckingPercent Description": "100% para silêncio da trilha, sem silenciar ambiente ou sons da criatura."
 }

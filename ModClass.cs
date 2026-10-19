@@ -8,11 +8,18 @@ namespace SCP096TheShyGuy
 {
     public sealed class ModClass : BasicMod<ModClass>
     {
-        private const string Version = "0.2.6";
+        private const string Version = "0.2.8";
         private const int MaxAttackAttempts = 3;
         private WorldBridge _world;
         private WorldfallSight _worldfallSight;
         private ShyGuyAudio _audio;
+        private DynamicMusicController _music;
+        private ShyGuyOverlay _overlay;
+        private object _localThreatActor, _pendingLocalDeath;
+        private bool _testMusicOverride, _musicOverrideEnabled = true;
+        private float _musicFadeDown = 2.8f, _musicFadeUp = 3.5f, _musicDuckingPercent = 100f;
+        private bool _deathFlashEnabled = true;
+        private float _deathFlashDuration = 2.6f;
         private float _cooldownUntil, _cooldownSeconds = 15f;
         private bool _worldfallLookEnabled = true;
         private bool _allowProximityWithWorldfall = false;
@@ -41,8 +48,8 @@ namespace SCP096TheShyGuy
         private string _status = "Inicializando...";
         private bool _soundEnabled = true, _visualCueEnabled = true;
         private float _volume = .7f;
-        private float _flashDuration = .95f, _flashOpacity = .24f;
-        private float _triggerDelay = 48f, _calmingDelay = 4f;
+        private float _flashDuration = 1.65f, _flashOpacity = .60f;
+        private float _triggerDelay = 55f, _calmingDelay = 4f;
         private float _tickSeconds = .25f, _attackDistance = 1.7f;
         private float _proximityDistance = 5f, _proximityTickSeconds = 1.5f;
         private int _maxWitnesses = 64;
@@ -64,6 +71,13 @@ namespace SCP096TheShyGuy
             _audio.MasterVolume = _volume;
             _audio.FlashDuration = _flashDuration;
             _audio.FlashOpacity = _flashOpacity;
+            _music = new DynamicMusicController(Log);
+            _music.Enabled = _musicOverrideEnabled;
+            _music.FadeDownSeconds = _musicFadeDown;
+            _music.FadeUpSeconds = _musicFadeUp;
+            _music.DuckFraction = _musicDuckingPercent / 100f;
+            _overlay = new ShyGuyOverlay(_audio.FaceImage, Log);
+            _overlay.Enabled = _visualCueEnabled;
             _traitsRegistered = ShyGuyTraits.Register();
             Log("Traits: " + (_traitsRegistered ? "registradas: Witness, RageSpeed" : "REGISTRO FALHOU; ver Player.log"));
             string reason;
@@ -74,7 +88,7 @@ namespace SCP096TheShyGuy
             }
             else Log("Asset pendente: " + reason);
             _initialized = true;
-            Log("v" + Version + " FMOD SOUND FIX: audio pelo FMOD do WorldBox, fade suave, traducoes; chase 0.2.4 preservada");
+            Log("v" + Version + " WorldFall Canvas overlay + dynamic BGM override; FMOD + chase preserved");
         }
 
         private void Update()
@@ -94,9 +108,24 @@ namespace SCP096TheShyGuy
             if (Input.GetKeyDown(KeyCode.F9)) Diagnostic();
             // Press while possessing a villager, without opening F5/F2 menus.
             if (Input.GetKeyDown(KeyCode.F10))
-                Log("CAPTURA F10 (durante jogo): " + _worldfallSight.DetailedSnapshot(_world, _scp));
+            {
+                if (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift))
+                {
+                    if (_overlay != null && _audio != null)
+                        _overlay.Show(_audio.FlashDuration, _audio.FlashOpacity, "preview SHIFT+F10 durante WorldFall");
+                }
+                else Log("CAPTURA F10 (durante jogo): " + _worldfallSight.DetailedSnapshot(_world, _scp));
+            }
             if (Input.GetKeyDown(KeyCode.F11))
-                ManualWorldfallWitness(now);
+            {
+                if (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift))
+                {
+                    _testMusicOverride = !_testMusicOverride;
+                    if (_music != null) _music.Request(_testMusicOverride);
+                    Log("PREVIEW BGM SHIFT+F11: " + _testMusicOverride);
+                }
+                else ManualWorldfallWitness(now);
+            }
             if (Input.GetMouseButtonDown(0) && !PointerInsidePanel())
             {
                 if (_placeOnMap) { _placeOnMap = false; SpawnOnClickedTile(); }
@@ -104,10 +133,21 @@ namespace SCP096TheShyGuy
             }
             if (now < _tickAt) return;
             _tickAt = now + _tickSeconds;
-            if (!_world.HasMap) return;
+            if (!_world.HasMap)
+            {
+                _localThreatActor = _pendingLocalDeath = null;
+                _testMusicOverride = false;
+                if (_music != null) _music.RestoreImmediately();
+                if (_overlay != null) _overlay.Reset();
+                return;
+            }
             if (!ReferenceEquals(_observedMap, _world.Map))
             {
                 if (_audio != null) _audio.Reset();
+                if (_music != null) _music.RestoreImmediately();
+                if (_overlay != null) _overlay.Reset();
+                _localThreatActor = _pendingLocalDeath = null;
+                _testMusicOverride = false;
                 _cooldownUntil = 0f;
                 _observedMap = _world.Map;
                 _scp = _victim = _lastIssuedVictim = null;
@@ -132,6 +172,10 @@ namespace SCP096TheShyGuy
                     _sessionOnlyWitnesses.Clear();
                     _brain.Reset(now);
                     if (_audio != null) _audio.Reset();
+                    if (_music != null) _music.RestoreImmediately();
+                    if (_overlay != null) _overlay.Reset();
+                    _localThreatActor = _pendingLocalDeath = null;
+                    _testMusicOverride = false;
                     _cooldownUntil = 0f;
                     _rageTraitApplied = false;
                     ResetChaseProgress(now);
@@ -165,7 +209,8 @@ namespace SCP096TheShyGuy
             UpdateCurrentTarget(now);
 
             ShyGuyState before = _brain.State;
-            _brain.Tick(now, _victim != null, _triggerDelay, _calmingDelay);
+            float effectiveTriggerDelay = _audio == null ? _triggerDelay : Mathf.Max(_triggerDelay, _audio.SuggestedTriggerDelay);
+            _brain.Tick(now, _victim != null, effectiveTriggerDelay, _calmingDelay);
             if (before != _brain.State)
             {
                 Log("Estado: " + before + " -> " + _brain.State + " (" + _brain.LastReason + ")");
@@ -190,6 +235,13 @@ namespace SCP096TheShyGuy
                 }
             }
 
+            if (_music != null)
+            {
+                bool markedPlayerAlive = _localThreatActor != null && _world.IsAlive(_localThreatActor);
+                bool stillThreatening = _brain.State == ShyGuyState.Triggered || _brain.State == ShyGuyState.Rage;
+                // Keep ducking throughout the entire chase, NOT just the trigger timer.
+                _music.Request(_testMusicOverride || (markedPlayerAlive && stillThreatening));
+            }
             if (_audio != null) _audio.Update(now, _brain.State, _world, _scp, _worldfallSight);
 
             if (_brain.State == ShyGuyState.Rage && _victim != null && _enableChase)
@@ -201,11 +253,18 @@ namespace SCP096TheShyGuy
                         _attackAttempts++;
                         _attackRetryAt = now + 3f;
                         float soundGain = _audio == null ? 0f : _audio.LocalGain(_world, _scp, _worldfallSight);
+                        bool controlledBeforeDeath = _worldfallSight != null &&
+                            ReferenceEquals(_victim, _worldfallSight.CurrentControlledActor);
                         _killPending = _world.TryKill(_victim);
                         if (_killPending)
                         {
                             _lastIssuedVictim = _victim;
                             if (_audio != null) _audio.Execution(soundGain);
+                            if (controlledBeforeDeath && _deathFlashEnabled)
+                            {
+                                _pendingLocalDeath = _victim;
+                                if (!_world.IsAlive(_victim)) ConfirmLocalDeath();
+                            }
                         }
                         Log((_killPending ? "EXECUCAO SOLICITADA" : "ATAQUE NAO ENVIADO") +
                             " tentativa=" + _attackAttempts + "; distancia no ataque=" + _world.TargetDistance(_scp, _victim) + "; alcance=" + _attackDistance.ToString("0.0", CultureInfo.InvariantCulture) + " tiles; " + _world.LastKillSignature);
@@ -337,7 +396,15 @@ namespace SCP096TheShyGuy
                 bool mapWitness = !_worldfallSight.Is3DWorldfallView &&
                     _brain.State == ShyGuyState.Triggered && source.StartsWith("proximidade") &&
                     ScpVisibleOnMap();
-                if (playerWitness || mapWitness) _audio.WitnessFlash(now);
+                if (playerWitness)
+                {
+                    _localThreatActor = candidate;
+                    if (_music != null) _music.Request(true);
+                }
+                if ((playerWitness || mapWitness) && _overlay != null && _audio.VisualCueEnabled)
+                    _overlay.Show(_audio.FlashDuration,
+                        playerWitness ? _audio.FlashOpacity : Mathf.Min(.42f, _audio.FlashOpacity),
+                        playerWitness ? "rosto visto pelo jogador WorldFall" : "proximidade 2D");
             }
         }
 
@@ -355,6 +422,7 @@ namespace SCP096TheShyGuy
             object old = _victim;
             if (old != null && !_world.IsAlive(old))
             {
+                if (ReferenceEquals(old, _pendingLocalDeath)) ConfirmLocalDeath();
                 if (ReferenceEquals(old, _lastIssuedVictim))
                 {
                     _killsConfirmed++;
@@ -368,6 +436,18 @@ namespace SCP096TheShyGuy
             if (_victim != null)
                 Log("PROXIMA VITIMA: fila=" + _queue.Count +
                     "; distancia=" + _world.TargetDistance(_scp, _victim));
+        }
+
+        private void ConfirmLocalDeath()
+        {
+            if (_pendingLocalDeath == null) return;
+            _pendingLocalDeath = null;
+            if (_deathFlashEnabled && _overlay != null)
+                _overlay.Show(_deathFlashDuration, Mathf.Max(.55f, _audio == null ? .55f : _audio.FlashOpacity),
+                    "morte confirmada causada pelo SCP");
+            // Player is no longer alive. Restore music, while allowing the death flash.
+            _localThreatActor = null;
+            if (_music != null) _music.Request(false);
         }
 
         private void ResetChaseProgress(float now)
@@ -412,11 +492,37 @@ namespace SCP096TheShyGuy
             Vector3 mouse = Input.mousePosition;
             return PanelRect.Contains(new Vector2(mouse.x, Screen.height - mouse.y));
         }
+        private void LateUpdate()
+        {
+            if (!_initialized) return;
+            if (_music != null) _music.Tick(Time.unscaledTime, Time.unscaledDeltaTime);
+            if (_overlay != null) _overlay.LateUpdate();
+        }
+        private void OnDisable()
+        {
+            if (_music != null) _music.RestoreImmediately();
+            if (_overlay != null) _overlay.Reset();
+        }
+        private void OnDestroy()
+        {
+            if (_music != null) _music.RestoreImmediately();
+            if (_overlay != null) _overlay.Destroy();
+        }
         private void OnGUI()
         {
             if (!_initialized) return;
-            if (_audio != null && Event.current.type == EventType.Repaint)
-                _audio.RenderFlash(Time.unscaledTime);
+            if (_overlay != null) _overlay.OnGUIFallback();
+            if (_worldfallSight != null && _worldfallSight.Is3DWorldfallView && !string.IsNullOrEmpty(_worldfallSight.HudHint))
+            {
+                string hint = _worldfallSight.HudHint;
+                Rect hr = new Rect((Screen.width - 420f) * .5f, Screen.height - 94f, 420f, 32f);
+                Color old = GUI.color;
+                GUI.color = new Color(0f, 0f, 0f, .55f);
+                GUI.DrawTexture(new Rect(hr.x, hr.y, hr.width, hr.height), Texture2D.whiteTexture);
+                GUI.color = Color.white;
+                GUI.Label(new Rect(hr.x + 10f, hr.y + 6f, hr.width - 20f, 22f), "SCP-096: " + hint);
+                GUI.color = old;
+            }
             Rect r = PanelRect;
             if (!_showPanel)
             {
@@ -427,7 +533,7 @@ namespace SCP096TheShyGuy
             GUI.Box(r, "SCP-096 - THE SHY GUY | v" + Version);
             if (GUI.Button(new Rect(r.x + r.width - 28, r.y + 3, 24, 22), "X")) _showPanel = false;
             Rect viewport = new Rect(r.x + 6, r.y + 28, r.width - 12, r.height - 35);
-            _scroll = GUI.BeginScrollView(viewport, _scroll, new Rect(0, 0, 324, 1110));
+            _scroll = GUI.BeginScrollView(viewport, _scroll, new Rect(0, 0, 324, 1330));
             float y = 0, x = 3;
             GUI.Label(new Rect(x,y,315,23), "Mapa: " + _world.Readiness); y+=23;
             GUI.Label(new Rect(x,y,315,23), "SCP: " + (_scp != null ? "encontrado" : "nenhum") +
@@ -452,7 +558,8 @@ namespace SCP096TheShyGuy
                 _audio.Enabled = GUI.Toggle(new Rect(x,y,315,23), _audio.Enabled,
                     "Audio de terror (global/local)"); y+=24;
                 _audio.VisualCueEnabled = GUI.Toggle(new Rect(x,y,315,23), _audio.VisualCueEnabled,
-                    "Flash suave (desligue se causar desconforto)"); y+=24;
+                    "Flash SCP-096 (Canvas WorldFall)"); y+=24;
+                if (_overlay != null) _overlay.Enabled = _audio.VisualCueEnabled;
                 GUI.Label(new Rect(x,y,315,23), "Volume " + (int)(_audio.MasterVolume * 100f) +
                     "% | DOCILE cooldown " + Mathf.Max(0f, _cooldownUntil - Time.unscaledTime).ToString("0") + "s"); y+=22;
                 _audio.MasterVolume = GUI.HorizontalSlider(new Rect(x,y+2f,315,15),
@@ -461,14 +568,42 @@ namespace SCP096TheShyGuy
                     _audio.FlashDuration.ToString("0.00") + "s | opacidade: " +
                     _audio.FlashOpacity.ToString("0.00")); y+=21;
                 _audio.FlashDuration = GUI.HorizontalSlider(new Rect(x,y+2f,315,15),
-                    _audio.FlashDuration, .4f, 2.5f); y+=20;
+                    _audio.FlashDuration, .4f, 3.5f); y+=20;
                 _audio.FlashOpacity = GUI.HorizontalSlider(new Rect(x,y+2f,315,15),
-                    _audio.FlashOpacity, .05f, .45f); y+=24;
+                    _audio.FlashOpacity, .05f, .85f); y+=24;
                 if (GUI.Button(new Rect(x,y,152,28), "Testar som global")) _audio.TestCue();
                 if (GUI.Button(new Rect(x+160,y,156,28), "Testar musica")) _audio.TestMusic();
                 y+=34;
                 if (GUI.Button(new Rect(x,y,316,27), "Parar sons de teste")) _audio.StopTests();
                 y+=33;
+                if (GUI.Button(new Rect(x,y,316,28), "Preview flash 3D / 2D"))
+                    if (_overlay != null) _overlay.Show(_audio.FlashDuration, _audio.FlashOpacity, "preview F5");
+                y+=34;
+                if (_music != null)
+                {
+                    _music.Enabled = GUI.Toggle(new Rect(x,y,315,23), _music.Enabled,
+                        "Silenciar BGM somente quando voce for vitima");
+                    y += 26;
+                }
+                if (GUI.Button(new Rect(x,y,152,28), _testMusicOverride ? "Restaurar BGM" : "Testar silenciar BGM"))
+                {
+                    _testMusicOverride = !_testMusicOverride;
+                    if (_music != null) _music.Request(_testMusicOverride);
+                }
+                if (GUI.Button(new Rect(x+160,y,156,28), "Restaurar musica"))
+                {
+                    _testMusicOverride = false;
+                    if (_music != null) _music.RestoreImmediately();
+                }
+                y+=34;
+                if (GUI.Button(new Rect(x,y,316,26), "Preview flash de morte (sem morrer)"))
+                    if (_overlay != null) _overlay.Show(_deathFlashDuration, .68f, "preview de morte F5");
+                y+=31;
+                _deathFlashEnabled = GUI.Toggle(new Rect(x,y,315,23), _deathFlashEnabled,
+                    "Jumpscare apenas na morte pelo SCP");
+                y+=27;
+                GUI.Label(new Rect(x,y,315,22), "Override: " + (_music == null ? "n/a" : _music.Status));
+                y+=26;
             }
             if (GUI.Button(new Rect(x,y,152,31), "Gerar aqui [F6]")) Spawn(false);
             if (GUI.Button(new Rect(x+160,y,156,31), "Gerar isolado")) Spawn(true);
@@ -537,6 +672,9 @@ namespace SCP096TheShyGuy
             _brain.Reset(Time.unscaledTime);
             _cooldownUntil = 0f;
             if (_audio != null) _audio.Reset();
+            if (_overlay != null) _overlay.Reset();
+            if (_music != null) _music.RestoreImmediately();
+            _localThreatActor = _pendingLocalDeath = null;
             ResetChaseProgress(Time.unscaledTime);
             Log("SCP-096 criado em " + _world.TileCoordinates(tile) + "; visual=" + _world.AppearanceStatus);
         }
@@ -597,6 +735,8 @@ namespace SCP096TheShyGuy
             Log(_world.DiagnosticMethods(_scp));
             Log(_world.DiagnosticShadows());
             Log("Ultimo movimento=" + _world.LastMoveSignature + " ultima execucao=" + _world.LastKillSignature);
+            Log("MUSIC=" + (_music == null ? "null" : _music.Status) +
+                " OVERLAY=" + (_overlay == null ? "null" : _overlay.Status));
             Log("Audio=" + (_audio == null ? "null" : _audio.Summary) +
                 " cooldownRestante=" + Mathf.Max(0f, _cooldownUntil - Time.unscaledTime).ToString("0.0"));
             Log(_worldfallSight.Diagnostic(_world, _scp));
@@ -605,15 +745,31 @@ namespace SCP096TheShyGuy
         {
             try
             {
-                _triggerDelay = ConfigFloat("TriggerDelay", 48f, 10f, 120f);
+                _triggerDelay = ConfigFloat("TriggerDelay", 55f, 10f, 120f);
                 _cooldownSeconds = ConfigFloat("DocileCooldownSeconds", 15f, 0f, 120f);
                 _volume = ConfigFloat("SoundVolume", .7f, 0f, 1f);
-                _flashDuration = ConfigFloatOptional("FaceFlashDuration", .95f, .4f, 2.5f);
-                _flashOpacity = ConfigFloatOptional("FaceFlashOpacity", .24f, .05f, .45f);
+                _flashDuration = ConfigFloatOptional("FaceFlashDuration", 1.65f, .4f, 3.5f);
+                _flashOpacity = ConfigFloatOptional("FaceFlashOpacity", .60f, .05f, .85f);
                 object audioSwitch = GetConfig()["SCP096"]["SoundEnabled"].GetValue();
                 if (audioSwitch is bool) _soundEnabled = (bool)audioSwitch;
                 object flashSwitch = GetConfig()["SCP096"]["FaceFlashEnabled"].GetValue();
                 if (flashSwitch is bool) _visualCueEnabled = (bool)flashSwitch;
+                _deathFlashDuration = ConfigFloatOptional("DeathFlashDuration", 2.6f, .4f, 6f);
+                try
+                {
+                    object v = GetConfig()["SCP096"]["DeathFlashEnabled"].GetValue();
+                    if (v is bool) _deathFlashEnabled = (bool)v;
+                }
+                catch { }
+                try
+                {
+                    object v = GetConfig()["SCP096"]["MusicOverrideEnabled"].GetValue();
+                    if (v is bool) _musicOverrideEnabled = (bool)v;
+                }
+                catch { }
+                _musicFadeDown = ConfigFloatOptional("MusicFadeDownSeconds", 2.8f, .2f, 12f);
+                _musicFadeUp = ConfigFloatOptional("MusicFadeUpSeconds", 3.5f, .2f, 12f);
+                _musicDuckingPercent = ConfigFloatOptional("MusicDuckingPercent", 100f, 0f, 100f);
                 _calmingDelay = ConfigFloat("CalmingDelay", 4f, 0f, 120f);
                 _tickSeconds = ConfigFloat("TickSeconds", .25f, .1f, 5f);
                 _attackDistance = ConfigFloat("AttackDistance", 1.7f, .5f, 10f);

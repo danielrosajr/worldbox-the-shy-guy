@@ -3,7 +3,7 @@
     {
       "Id": "TriggerDelay",
       "Type": "TEXT",
-      "TextVal": "48"
+      "TextVal": "55"
     },
     {
       "Id": "DocileCooldownSeconds",
@@ -28,12 +28,12 @@
     {
       "Id": "FaceFlashDuration",
       "Type": "TEXT",
-      "TextVal": "0.95"
+      "TextVal": "1.65"
     },
     {
       "Id": "FaceFlashOpacity",
       "Type": "TEXT",
-      "TextVal": "0.24"
+      "TextVal": "0.60"
     },
     {
       "Id": "CalmingDelay",
@@ -109,6 +109,36 @@
       "Id": "DebugLogs",
       "Type": "SWITCH",
       "BoolVal": true
+    },
+    {
+      "Id": "DeathFlashDuration",
+      "Type": "TEXT",
+      "TextVal": "2.6"
+    },
+    {
+      "Id": "DeathFlashEnabled",
+      "Type": "SWITCH",
+      "BoolVal": true
+    },
+    {
+      "Id": "MusicOverrideEnabled",
+      "Type": "SWITCH",
+      "BoolVal": true
+    },
+    {
+      "Id": "MusicFadeDownSeconds",
+      "Type": "TEXT",
+      "TextVal": "2.8"
+    },
+    {
+      "Id": "MusicFadeUpSeconds",
+      "Type": "TEXT",
+      "TextVal": "3.5"
+    },
+    {
+      "Id": "MusicDuckingPercent",
+      "Type": "TEXT",
+      "TextVal": "100"
     }
   ]
 }

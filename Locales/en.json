@@ -53,5 +53,17 @@
   "ProximityDistance Description": "Setting for SCP-096 behavior.",
   "ProximityScanSeconds Description": "Setting for SCP-096 behavior.",
   "MaxWitnesses Description": "Setting for SCP-096 behavior.",
-  "DebugLogs Description": "Setting for SCP-096 behavior."
+  "DebugLogs Description": "Setting for SCP-096 behavior.",
+  "DeathFlashDuration": "Death flash duration (seconds)",
+  "DeathFlashEnabled": "Show flash on SCP-killed player",
+  "DeathFlashDuration Description": "Duration of the image after the SCP kills the controlled actor.",
+  "DeathFlashEnabled Description": "Only on kills performed by the SCP-096, not on ordinary deaths.",
+  "MusicOverrideEnabled": "Mute game soundtrack when you are the witness",
+  "MusicOverrideEnabled Description": "Does not change game SFX or SCP custom audio.",
+  "MusicFadeDownSeconds": "Soundtrack fade-out time (seconds)",
+  "MusicFadeDownSeconds Description": "Only the game music is lowered.",
+  "MusicFadeUpSeconds": "Soundtrack fade-in time (seconds)",
+  "MusicFadeUpSeconds Description": "Original music volume is restored after the chase.",
+  "MusicDuckingPercent": "Game music reduction (%)",
+  "MusicDuckingPercent Description": "100% removes BGM without muting environmental sounds."
 }
