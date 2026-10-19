@@ -1,8 +1,8 @@
 {
   "name": "SCP-096 The Shy Guy",
   "author": "Arvak",
-  "version": "0.2.3",
-  "description": "WorldFall 3D runtime bridge based on inspected Worldfall.dll: FirstPerson.WorldBoxMod Host/View. Manual F11 possession test; safe GPU occlusion pending. Preserves working pursuit.",
+  "version": "0.2.4",
+  "description": "WorldFall 3D experimental line-of-sight aiming via get_Picked and facing from SceneCollector._headings. Preserves tested pursuit and witness FIFO.",
   "iconPath": "icon.png",
   "ModType": "NEOMOD"
 }

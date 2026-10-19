@@ -8,14 +8,16 @@ namespace SCP096TheShyGuy
 {
     public sealed class ModClass : BasicMod<ModClass>
     {
-        private const string Version = "0.2.3";
+        private const string Version = "0.2.4";
         private const int MaxAttackAttempts = 3;
         private WorldBridge _world;
         private WorldfallSight _worldfallSight;
         private bool _worldfallLookEnabled = true;
         private bool _allowProximityWithWorldfall = false;
         private float _worldfallLookAt, _worldfallMaxTiles = 35f, _worldfallLookHold = .45f;
-        private float _worldfallRecheckSeconds = .2f;
+        private float _worldfallRecheckSeconds = .18f;
+        private bool _worldfallRequireFacing = true;
+        private float _worldfallFacingOffset = 0f, _worldfallFaceCone = 65f;
         
         private ShyGuyBrain _brain;
         private readonly WitnessQueue _queue = new WitnessQueue();
@@ -61,7 +63,7 @@ namespace SCP096TheShyGuy
             }
             else Log("Asset pendente: " + reason);
             _initialized = true;
-            Log("v" + Version + " bridge real FirstPerson.WorldBoxMod/get_Host/get_View; F10 diagnostico; F11 TESTE MANUAL aldeao 3D; auto-olhar aguarda validacao GPU");
+            Log("v" + Version + " WorldFall look prototype: get_Picked + SceneCollector.Heading + hold; F10 diagnostico; F11 manual; alcance real preservado");
         }
 
         private void Update()
@@ -129,6 +131,7 @@ namespace SCP096TheShyGuy
             if (_worldfallLookEnabled && now >= _worldfallLookAt)
             {
                 _worldfallLookAt = now + _worldfallRecheckSeconds;
+                _worldfallSight.Configure(_worldfallFacingOffset, _worldfallFaceCone, _worldfallRequireFacing);
                 object observer;
                 if (_worldfallSight.Check(_world, _scp, _worldfallMaxTiles, _worldfallLookHold,
                     now, out observer) && observer != null)
@@ -365,7 +368,7 @@ namespace SCP096TheShyGuy
             GUI.Box(r, "SCP-096 - THE SHY GUY | v" + Version);
             if (GUI.Button(new Rect(r.x + r.width - 28, r.y + 3, 24, 22), "X")) _showPanel = false;
             Rect viewport = new Rect(r.x + 6, r.y + 28, r.width - 12, r.height - 35);
-            _scroll = GUI.BeginScrollView(viewport, _scroll, new Rect(0, 0, 324, 815));
+            _scroll = GUI.BeginScrollView(viewport, _scroll, new Rect(0, 0, 324, 930));
             float y = 0, x = 3;
             GUI.Label(new Rect(x,y,315,23), "Mapa: " + _world.Readiness); y+=23;
             GUI.Label(new Rect(x,y,315,23), "SCP: " + (_scp != null ? "encontrado" : "nenhum") +
@@ -373,7 +376,14 @@ namespace SCP096TheShyGuy
             GUI.Label(new Rect(x,y,315,23), "Fila de testemunhas: " + _queue.Count +
                 " | Eliminadas: " + _killsConfirmed); y+=23;
             GUI.Label(new Rect(x,y,315,23), "Alvo: " + (_victim == null ? "nenhum" : _world.TargetDistance(_scp, _victim))); y+=25;
-            _worldfallLookEnabled = GUI.Toggle(new Rect(x,y,315,23), _worldfallLookEnabled, "Worldfall: detectar rosto em 3D (seguro)"); y+=24;
+            _worldfallLookEnabled = GUI.Toggle(new Rect(x,y,315,23), _worldfallLookEnabled, "Worldfall: detectar olhar (experimental)"); y+=24;
+            _worldfallRequireFacing = GUI.Toggle(new Rect(x,y,315,23), _worldfallRequireFacing,
+                "Exigir SCP de frente (Heading)"); y+=24;
+            if (GUI.Button(new Rect(x,y,316,25), "Inverter sentido do rosto (offset 180)") )
+                _worldfallFacingOffset = _worldfallFacingOffset == 0f ? 180f : 0f;
+            y+=29;
+            GUI.Label(new Rect(x,y,315,23), "Offset rosto: " + _worldfallFacingOffset.ToString("0") +
+                " deg | F10 para diagnostico"); y+=24;
             GUI.Label(new Rect(x,y,315,40), "Visao 3D: " + _worldfallSight.ShortStatus); y+=42;
             _enableChase = GUI.Toggle(new Rect(x,y,315,23), _enableChase, "Perseguir e eliminar"); y+=25;
             _enableProximity = GUI.Toggle(new Rect(x,y,320,23), _enableProximity,
@@ -522,6 +532,10 @@ namespace SCP096TheShyGuy
                 if (cameraFlag is bool) _worldfallLookEnabled = (bool)cameraFlag;
                 _worldfallMaxTiles = ConfigFloat("WorldfallMaxLookTiles", 35f, 2f, 120f);
                 _worldfallLookHold = ConfigFloat("WorldfallLookHoldSeconds", .45f, .1f, 3f);
+                _worldfallFaceCone = ConfigFloat("WorldfallFaceConeDegrees", 65f, 10f, 89f);
+                _worldfallFacingOffset = ConfigFloat("WorldfallFacingOffsetDegrees", 0f, -360f, 360f);
+                object facing = GetConfig()["SCP096"]["WorldfallRequireFacing"].GetValue();
+                if (facing is bool) _worldfallRequireFacing = (bool)facing;
                 object allowProximity = GetConfig()["SCP096"]["AllowProximityWhilePossessing"].GetValue();
                 if (allowProximity is bool) _allowProximityWithWorldfall = (bool)allowProximity;
                 object debug = GetConfig()["SCP096"]["DebugLogs"].GetValue();

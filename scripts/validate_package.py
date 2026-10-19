@@ -7,7 +7,7 @@ import struct
 root = Path(__file__).resolve().parents[1]
 manifest = json.loads((root / 'mod.json').read_text())
 config = json.loads((root / 'default_config.json').read_text())
-assert manifest['version'] == '0.2.3'
+assert manifest['version'] == '0.2.4'
 assert manifest['name'] == 'SCP-096 The Shy Guy'
 assert 'SCP096' in config and all(x['Id'] for x in config['SCP096'])
 for f in ['ModClass.cs', 'src/WorldBridge.cs', 'src/Reflect.cs', 'src/StateMachine.cs', 'src/WitnessQueue.cs', 'src/Traits.cs', 'src/WorldfallSight.cs']:
@@ -65,3 +65,11 @@ print('PASS: Worldfall 3D model GLB header, pack metadata, optional detection co
 # Regression: v0.2.0 accidentally referenced an undeclared field and did not compile.
 assert '_worldfallSightLogged' not in (root / 'ModClass.cs').read_text()
 print('PASS: missing-field CS0103 regression guard.')
+
+# v0.2.4 source-only feature guards.
+sight=(root/'src/WorldfallSight.cs').read_text()
+assert 'get_Picked' in sight and '_headings' in sight and 'holdSeconds' in sight
+assert 'FaceTowardsViewer' in sight and 'ClearHold' in sight
+assert 'TryKill' not in sight and 'Worldfall.dll' not in str(list(root.glob('**/*')))
+assert (root/'docs/WORLDFALL_SIGHT_024.md').is_file()
+print('PASS: v0.2.4 automatic 3D selection/facing/hold source guards.')

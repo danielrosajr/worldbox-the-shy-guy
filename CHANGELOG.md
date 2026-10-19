@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.4-alpha — 2026-10-18
+
+- `WorldfallSight` atualizado para usar `get_Picked()` do renderizador real, sem fazer GPU readbacks proprios.
+- Verificacao de frente com `Creatures.States[Actor].Heading` (para species como sheep) ou `SceneCollector._headings[Actor].Angle`, calibracao 0/180.
+- Hold visual de 0,45s; uma marcacao por sequencia de olhar.
+- F10 agora reporta AIM / FACE / RESULT em campos separados.
+- Proximidade 2D desativada por padrao para isolar testes 3D (pode reativar no F5).
+- Mantidos fila FIFO, trait Witness, Rage, movimento `Actor.moveTo`, e morte somente a 1,7 tiles.
+- Testes internos: validacao estrutural. **Nao compilado/executado no WorldBox.**
+
+# Changelog
+
 ## v0.2.3-alpha
 - Integração com a instância real `FirstPerson.WorldBoxMod`, obtida de `MonoBehaviour`.
 - Descoberta e leitura de `get_IsFirstPerson`, `get_Host`, `get_View`, `ViewState` (posição e orientação).
