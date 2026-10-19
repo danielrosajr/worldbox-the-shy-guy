@@ -8,10 +8,12 @@ namespace SCP096TheShyGuy
 {
     public sealed class ModClass : BasicMod<ModClass>
     {
-        private const string Version = "0.2.4";
+        private const string Version = "0.2.6";
         private const int MaxAttackAttempts = 3;
         private WorldBridge _world;
         private WorldfallSight _worldfallSight;
+        private ShyGuyAudio _audio;
+        private float _cooldownUntil, _cooldownSeconds = 15f;
         private bool _worldfallLookEnabled = true;
         private bool _allowProximityWithWorldfall = false;
         private float _worldfallLookAt, _worldfallMaxTiles = 35f, _worldfallLookHold = .45f;
@@ -37,7 +39,10 @@ namespace SCP096TheShyGuy
         private int _attackAttempts, _killsConfirmed;
         private bool _initialized, _showPanel = true, _placeOnMap, _selectRemote;
         private string _status = "Inicializando...";
-        private float _triggerDelay = 8f, _calmingDelay = 4f;
+        private bool _soundEnabled = true, _visualCueEnabled = true;
+        private float _volume = .7f;
+        private float _flashDuration = .95f, _flashOpacity = .24f;
+        private float _triggerDelay = 48f, _calmingDelay = 4f;
         private float _tickSeconds = .25f, _attackDistance = 1.7f;
         private float _proximityDistance = 5f, _proximityTickSeconds = 1.5f;
         private int _maxWitnesses = 64;
@@ -53,6 +58,12 @@ namespace SCP096TheShyGuy
             _worldfallSight = new WorldfallSight();
             _brain = new ShyGuyBrain();
             ReadSettings();
+            _audio = new ShyGuyAudio(GetDeclaration().FolderPath, Log);
+            _audio.Enabled = _soundEnabled;
+            _audio.VisualCueEnabled = _visualCueEnabled;
+            _audio.MasterVolume = _volume;
+            _audio.FlashDuration = _flashDuration;
+            _audio.FlashOpacity = _flashOpacity;
             _traitsRegistered = ShyGuyTraits.Register();
             Log("Traits: " + (_traitsRegistered ? "registradas: Witness, RageSpeed" : "REGISTRO FALHOU; ver Player.log"));
             string reason;
@@ -63,7 +74,7 @@ namespace SCP096TheShyGuy
             }
             else Log("Asset pendente: " + reason);
             _initialized = true;
-            Log("v" + Version + " WorldFall look prototype: get_Picked + SceneCollector.Heading + hold; F10 diagnostico; F11 manual; alcance real preservado");
+            Log("v" + Version + " FMOD SOUND FIX: audio pelo FMOD do WorldBox, fade suave, traducoes; chase 0.2.4 preservada");
         }
 
         private void Update()
@@ -96,6 +107,8 @@ namespace SCP096TheShyGuy
             if (!_world.HasMap) return;
             if (!ReferenceEquals(_observedMap, _world.Map))
             {
+                if (_audio != null) _audio.Reset();
+                _cooldownUntil = 0f;
                 _observedMap = _world.Map;
                 _scp = _victim = _lastIssuedVictim = null;
                 _queue.Clear();
@@ -118,6 +131,8 @@ namespace SCP096TheShyGuy
                     _queue.Clear();
                     _sessionOnlyWitnesses.Clear();
                     _brain.Reset(now);
+                    if (_audio != null) _audio.Reset();
+                    _cooldownUntil = 0f;
                     _rageTraitApplied = false;
                     ResetChaseProgress(now);
                     if (_scp != null && _traitsRegistered)
@@ -154,6 +169,12 @@ namespace SCP096TheShyGuy
             if (before != _brain.State)
             {
                 Log("Estado: " + before + " -> " + _brain.State + " (" + _brain.LastReason + ")");
+                if (_audio != null) _audio.StateChanged(_brain.State, now);
+                if (_brain.State == ShyGuyState.Docile && before == ShyGuyState.Calming)
+                {
+                    _cooldownUntil = now + _cooldownSeconds;
+                    Log("COOLDOWN DOCILE iniciado: " + _cooldownSeconds.ToString("0") + "s sem novas testemunhas");
+                }
                 if (_brain.State == ShyGuyState.Rage)
                 {
                     _rageTraitApplied = _traitsRegistered && _world.AddTrait(_scp, ShyGuyTraits.RageId);
@@ -169,6 +190,8 @@ namespace SCP096TheShyGuy
                 }
             }
 
+            if (_audio != null) _audio.Update(now, _brain.State, _world, _scp, _worldfallSight);
+
             if (_brain.State == ShyGuyState.Rage && _victim != null && _enableChase)
             {
                 if (_world.Within(_scp, _victim, _attackDistance))
@@ -177,8 +200,13 @@ namespace SCP096TheShyGuy
                     {
                         _attackAttempts++;
                         _attackRetryAt = now + 3f;
+                        float soundGain = _audio == null ? 0f : _audio.LocalGain(_world, _scp, _worldfallSight);
                         _killPending = _world.TryKill(_victim);
-                        if (_killPending) _lastIssuedVictim = _victim;
+                        if (_killPending)
+                        {
+                            _lastIssuedVictim = _victim;
+                            if (_audio != null) _audio.Execution(soundGain);
+                        }
                         Log((_killPending ? "EXECUCAO SOLICITADA" : "ATAQUE NAO ENVIADO") +
                             " tentativa=" + _attackAttempts + "; distancia no ataque=" + _world.TargetDistance(_scp, _victim) + "; alcance=" + _attackDistance.ToString("0.0", CultureInfo.InvariantCulture) + " tiles; " + _world.LastKillSignature);
                     }
@@ -261,8 +289,12 @@ namespace SCP096TheShyGuy
             {
                 if (ReferenceEquals(actor, _scp)) continue;
                 if (_queue.Count >= _maxWitnesses) break;
+                // In WorldFall, NPCs still use the lightweight 2D proximity behavior.
+                // The possessed human must see the FACE to become a witness.
+                bool isControlled = _worldfallSight.Is3DWorldfallView &&
+                    ReferenceEquals(actor, _worldfallSight.CurrentControlledActor);
                 bool newlyObserved = _enableProximity &&
-                    (_allowProximityWithWorldfall || !_worldfallSight.Is3DWorldfallView) &&
+                    (!isControlled || _allowProximityWithWorldfall) &&
                     _world.Within(_scp, actor, _proximityDistance);
                 // Full-world trait scan only every 12 seconds, not every frame.
                 if (!newlyObserved && !fullScan) continue;
@@ -279,6 +311,10 @@ namespace SCP096TheShyGuy
             if (candidate == null || !_world.IsAlive(candidate) ||
                 ReferenceEquals(candidate, _scp) || _world.AssetId(candidate) == WorldBridge.ScpId ||
                 _queue.Contains(candidate) || _queue.Count >= _maxWitnesses) return;
+            // Cooldown only after an entire RAGE/Calming cycle. New witnesses can still
+            // join while actively triggered or raging, without restarting the soundtrack.
+            if (_brain.State == ShyGuyState.Calming ||
+                (_brain.State == ShyGuyState.Docile && now < _cooldownUntil)) return;
             if (_traitsRegistered && !_world.AddTrait(candidate, ShyGuyTraits.WitnessId))
             {
                 _sessionOnlyWitnesses.Add(candidate);
@@ -287,8 +323,29 @@ namespace SCP096TheShyGuy
             if (!_queue.Enqueue(candidate, _maxWitnesses)) return;
             Log("TESTEMUNHA MARCADA via " + source + "; fila=" + _queue.Count +
                 "; distancia=" + _world.TargetDistance(_scp, candidate));
-            if (_brain.State == ShyGuyState.Docile || _brain.State == ShyGuyState.Calming)
-                _brain.Transition(ShyGuyState.Triggered, now, "primeira testemunha: " + source);
+            if (_brain.State == ShyGuyState.Docile &&
+                _brain.Transition(ShyGuyState.Triggered, now, "primeira testemunha: " + source))
+            {
+                if (_audio != null) _audio.StateChanged(ShyGuyState.Triggered, now);
+            }
+            if (_audio != null)
+            {
+                // Only show face cue if the viewer is actually the possessed player, or
+                // in 2D when the SCP is visibly on the local map screen.
+                bool playerWitness = _worldfallSight.Is3DWorldfallView &&
+                    ReferenceEquals(candidate, _worldfallSight.CurrentControlledActor);
+                bool mapWitness = !_worldfallSight.Is3DWorldfallView &&
+                    _brain.State == ShyGuyState.Triggered && source.StartsWith("proximidade") &&
+                    ScpVisibleOnMap();
+                if (playerWitness || mapWitness) _audio.WitnessFlash(now);
+            }
+        }
+
+        private bool ScpVisibleOnMap()
+        {
+            if (Camera.main == null || !_world.Position(_scp, out float x, out float y)) return false;
+            Vector3 view = Camera.main.WorldToViewportPoint(new Vector3(x, y, 0f));
+            return view.z > 0f && view.x >= 0f && view.x <= 1f && view.y >= 0f && view.y <= 1f;
         }
 
         private void UpdateCurrentTarget(float now)
@@ -358,6 +415,8 @@ namespace SCP096TheShyGuy
         private void OnGUI()
         {
             if (!_initialized) return;
+            if (_audio != null && Event.current.type == EventType.Repaint)
+                _audio.RenderFlash(Time.unscaledTime);
             Rect r = PanelRect;
             if (!_showPanel)
             {
@@ -368,7 +427,7 @@ namespace SCP096TheShyGuy
             GUI.Box(r, "SCP-096 - THE SHY GUY | v" + Version);
             if (GUI.Button(new Rect(r.x + r.width - 28, r.y + 3, 24, 22), "X")) _showPanel = false;
             Rect viewport = new Rect(r.x + 6, r.y + 28, r.width - 12, r.height - 35);
-            _scroll = GUI.BeginScrollView(viewport, _scroll, new Rect(0, 0, 324, 930));
+            _scroll = GUI.BeginScrollView(viewport, _scroll, new Rect(0, 0, 324, 1110));
             float y = 0, x = 3;
             GUI.Label(new Rect(x,y,315,23), "Mapa: " + _world.Readiness); y+=23;
             GUI.Label(new Rect(x,y,315,23), "SCP: " + (_scp != null ? "encontrado" : "nenhum") +
@@ -387,7 +446,30 @@ namespace SCP096TheShyGuy
             GUI.Label(new Rect(x,y,315,40), "Visao 3D: " + _worldfallSight.ShortStatus); y+=42;
             _enableChase = GUI.Toggle(new Rect(x,y,315,23), _enableChase, "Perseguir e eliminar"); y+=25;
             _enableProximity = GUI.Toggle(new Rect(x,y,320,23), _enableProximity,
-                "Marcar NPCs a " + _proximityDistance.ToString("0") + " tiles (2D)"); y+=28;
+                "Marcar NPCs a " + _proximityDistance.ToString("0") + " tiles (2D)"); y+=26;
+            if (_audio != null)
+            {
+                _audio.Enabled = GUI.Toggle(new Rect(x,y,315,23), _audio.Enabled,
+                    "Audio de terror (global/local)"); y+=24;
+                _audio.VisualCueEnabled = GUI.Toggle(new Rect(x,y,315,23), _audio.VisualCueEnabled,
+                    "Flash suave (desligue se causar desconforto)"); y+=24;
+                GUI.Label(new Rect(x,y,315,23), "Volume " + (int)(_audio.MasterVolume * 100f) +
+                    "% | DOCILE cooldown " + Mathf.Max(0f, _cooldownUntil - Time.unscaledTime).ToString("0") + "s"); y+=22;
+                _audio.MasterVolume = GUI.HorizontalSlider(new Rect(x,y+2f,315,15),
+                    _audio.MasterVolume, 0f, 1f); y+=22;
+                GUI.Label(new Rect(x,y,315,20), "Fade do flash: " +
+                    _audio.FlashDuration.ToString("0.00") + "s | opacidade: " +
+                    _audio.FlashOpacity.ToString("0.00")); y+=21;
+                _audio.FlashDuration = GUI.HorizontalSlider(new Rect(x,y+2f,315,15),
+                    _audio.FlashDuration, .4f, 2.5f); y+=20;
+                _audio.FlashOpacity = GUI.HorizontalSlider(new Rect(x,y+2f,315,15),
+                    _audio.FlashOpacity, .05f, .45f); y+=24;
+                if (GUI.Button(new Rect(x,y,152,28), "Testar som global")) _audio.TestCue();
+                if (GUI.Button(new Rect(x+160,y,156,28), "Testar musica")) _audio.TestMusic();
+                y+=34;
+                if (GUI.Button(new Rect(x,y,316,27), "Parar sons de teste")) _audio.StopTests();
+                y+=33;
+            }
             if (GUI.Button(new Rect(x,y,152,31), "Gerar aqui [F6]")) Spawn(false);
             if (GUI.Button(new Rect(x+160,y,156,31), "Gerar isolado")) Spawn(true);
             y+=38;
@@ -453,6 +535,8 @@ namespace SCP096TheShyGuy
             _victim = null;
             _queue.Clear();
             _brain.Reset(Time.unscaledTime);
+            _cooldownUntil = 0f;
+            if (_audio != null) _audio.Reset();
             ResetChaseProgress(Time.unscaledTime);
             Log("SCP-096 criado em " + _world.TileCoordinates(tile) + "; visual=" + _world.AppearanceStatus);
         }
@@ -513,13 +597,23 @@ namespace SCP096TheShyGuy
             Log(_world.DiagnosticMethods(_scp));
             Log(_world.DiagnosticShadows());
             Log("Ultimo movimento=" + _world.LastMoveSignature + " ultima execucao=" + _world.LastKillSignature);
+            Log("Audio=" + (_audio == null ? "null" : _audio.Summary) +
+                " cooldownRestante=" + Mathf.Max(0f, _cooldownUntil - Time.unscaledTime).ToString("0.0"));
             Log(_worldfallSight.Diagnostic(_world, _scp));
         }
         private void ReadSettings()
         {
             try
             {
-                _triggerDelay = ConfigFloat("TriggerDelay", 8f, 0f, 120f);
+                _triggerDelay = ConfigFloat("TriggerDelay", 48f, 10f, 120f);
+                _cooldownSeconds = ConfigFloat("DocileCooldownSeconds", 15f, 0f, 120f);
+                _volume = ConfigFloat("SoundVolume", .7f, 0f, 1f);
+                _flashDuration = ConfigFloatOptional("FaceFlashDuration", .95f, .4f, 2.5f);
+                _flashOpacity = ConfigFloatOptional("FaceFlashOpacity", .24f, .05f, .45f);
+                object audioSwitch = GetConfig()["SCP096"]["SoundEnabled"].GetValue();
+                if (audioSwitch is bool) _soundEnabled = (bool)audioSwitch;
+                object flashSwitch = GetConfig()["SCP096"]["FaceFlashEnabled"].GetValue();
+                if (flashSwitch is bool) _visualCueEnabled = (bool)flashSwitch;
                 _calmingDelay = ConfigFloat("CalmingDelay", 4f, 0f, 120f);
                 _tickSeconds = ConfigFloat("TickSeconds", .25f, .1f, 5f);
                 _attackDistance = ConfigFloat("AttackDistance", 1.7f, .5f, 10f);
@@ -543,6 +637,14 @@ namespace SCP096TheShyGuy
             }
             catch (Exception ex) { Log("Usando defaults: " + ex.Message); }
         }
+        // Older NML user configs may not contain fields added in this update.
+        // Do not abort the rest of ReadSettings when they are missing.
+        private float ConfigFloatOptional(string key, float fallback, float min, float max)
+        {
+            try { return ConfigFloat(key, fallback, min, max); }
+            catch { return fallback; }
+        }
+
         private float ConfigFloat(string key, float fallback, float min, float max)
         {
             object v = GetConfig()["SCP096"][key].GetValue();

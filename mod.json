@@ -1,8 +1,8 @@
 {
   "name": "SCP-096 The Shy Guy",
   "author": "Arvak",
-  "version": "0.2.4",
-  "description": "WorldFall 3D experimental line-of-sight aiming via get_Picked and facing from SceneCollector._headings. Preserves tested pursuit and witness FIFO.",
+  "version": "0.2.6",
+  "description": "FMOD native audio hotfix, 2D/global audio, smooth flash fade, missing setting localizations; WorldFall gaze and chase preserved.",
   "iconPath": "icon.png",
   "ModType": "NEOMOD"
 }

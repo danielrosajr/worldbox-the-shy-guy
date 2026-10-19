@@ -7,7 +7,7 @@ import struct
 root = Path(__file__).resolve().parents[1]
 manifest = json.loads((root / 'mod.json').read_text())
 config = json.loads((root / 'default_config.json').read_text())
-assert manifest['version'] == '0.2.4'
+assert manifest['version'] == '0.2.6'
 assert manifest['name'] == 'SCP-096 The Shy Guy'
 assert 'SCP096' in config and all(x['Id'] for x in config['SCP096'])
 for f in ['ModClass.cs', 'src/WorldBridge.cs', 'src/Reflect.cs', 'src/StateMachine.cs', 'src/WitnessQueue.cs', 'src/Traits.cs', 'src/WorldfallSight.cs']:
@@ -73,3 +73,24 @@ assert 'FaceTowardsViewer' in sight and 'ClearHold' in sight
 assert 'TryKill' not in sight and 'Worldfall.dll' not in str(list(root.glob('**/*')))
 assert (root/'docs/WORLDFALL_SIGHT_024.md').is_file()
 print('PASS: v0.2.4 automatic 3D selection/facing/hold source guards.')
+
+assert 'ShyGuyAudio' in (root/'ModClass.cs').read_text()
+assert (root/'src/ShyGuyAudio.cs').is_file()
+assert 'DocileCooldownSeconds' in [x['Id'] for x in config['SCP096']]
+assert '48f' in (root/'ModClass.cs').read_text()
+print('PASS: audio and cooldown wiring static checks.')
+
+# v0.2.6 FMOD and localization regressions.
+for locale in ('en','pt_BR','pt'):
+    loc=json.loads((root/'Locales'/f'{locale}.json').read_text())
+    for setting in config['SCP096']:
+        key=setting['Id']
+        assert loc.get(key), (locale,key)
+        assert loc.get(key+' Description'), (locale,key+' Description')
+audio=(root/'src/ShyGuyAudio.cs').read_text()
+assert 'RuntimeManager.StudioSystem.getCoreSystem' in audio
+assert '_system.createSound' in audio and '_system.playSound' in audio
+assert "var clip = AudioClip.Create" not in audio and "AddComponent<AudioSource>" not in audio
+assert 'Mathf.SmoothStep' in audio and 'TestCue()' in audio
+assert 'FMOD SOUND FIX' in (root/'ModClass.cs').read_text()
+print('PASS: FMOD code path, sound tests, fade and settings localizations.')

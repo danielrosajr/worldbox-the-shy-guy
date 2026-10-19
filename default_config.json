@@ -3,7 +3,37 @@
     {
       "Id": "TriggerDelay",
       "Type": "TEXT",
-      "TextVal": "8"
+      "TextVal": "48"
+    },
+    {
+      "Id": "DocileCooldownSeconds",
+      "Type": "TEXT",
+      "TextVal": "15"
+    },
+    {
+      "Id": "SoundEnabled",
+      "Type": "SWITCH",
+      "BoolVal": true
+    },
+    {
+      "Id": "SoundVolume",
+      "Type": "TEXT",
+      "TextVal": "0.7"
+    },
+    {
+      "Id": "FaceFlashEnabled",
+      "Type": "SWITCH",
+      "BoolVal": true
+    },
+    {
+      "Id": "FaceFlashDuration",
+      "Type": "TEXT",
+      "TextVal": "0.95"
+    },
+    {
+      "Id": "FaceFlashOpacity",
+      "Type": "TEXT",
+      "TextVal": "0.24"
     },
     {
       "Id": "CalmingDelay",
@@ -58,7 +88,7 @@
     {
       "Id": "ProximityWitnesses",
       "Type": "SWITCH",
-      "BoolVal": false
+      "BoolVal": true
     },
     {
       "Id": "ProximityDistance",

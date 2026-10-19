@@ -1,31 +1,48 @@
-# SCP-096: The Shy Guy v0.2.4-alpha — WorldFall Look Prototype
+# SCP-096 v0.2.6-alpha — FMOD Audio Fix
 
-Esta versao tenta marcar automaticamente o personagem controlado ao **apontar para o SCP visivel, de frente, por 0,45 segundo** no WorldFall 3D. Usa `FirstPerson.WorldBoxMod.get_Picked()` (campo `_picked`) e os caches `Creatures.States`/`SceneCollector._headings` identificados na sua Worldfall.dll. **Ainda nao e detecao precisa de pixels do rosto**: a mira identifica o ator renderizado e a checagem frontal e uma aproximacao. Leia `docs/WORLDFALL_SIGHT_024.md`.
+**Alteração crítica:** WorldBox desabilita o sistema padrão Unity AudioSource/AudioClip e usa FMOD.
+A v0.2.5 falhava em todos os `AudioClip.SetData`, por isso não havia sons. Agora
+`src/ShyGuyAudio.cs` usa o FMOD Core do próprio jogo via `FMODUnity.RuntimeManager`.
 
-## Instalar
+**Não testado dentro do WorldBox neste ambiente.** Testar em mundo descartável.
+O padrão de reprodução foi comparado ao `NeoModLoader.utils.CustomAudioManager`.
 
-Fechar WorldBox; remover a pasta `SCP096-TheShyGuy-0.2.3` antiga; extrair somente `SCP096-TheShyGuy-0.2.4` em `Mods`. `mod.json` deve ter version 0.2.4. O GLB nao mudou, entao nao e preciso reinstalar o pack 3D se ja estiver ativo.
+## Novidades
+- Áudio WAV carregado pelo FMOD Core e reproduzido em canais nativos.
+- Aviso TRIGGERED e música globais, grito inicial de RAGE global de uma execução.
+- Choro em DOCILE, grito em loop durante RAGE e som de execução com atenuação local por tiles.
+- Som em loop usa arquivos em streaming para reduzir RAM.
+- Botões no F5: **Testar som global**, **Testar musica** e **Parar sons de teste**.
+- Mensagens `Audio FMOD carregado`, `Audio FMOD PLAY`, com motivos de falha.
+- Flash com entrada suave, duração default 0,95s e opacidade default 0,24; dois controles no F5.
+- Traduções dos campos e descrições do menu NML em português e inglês.
+- A perseguição, o ataque e a câmera WorldFall 3D foram preservados do código anterior.
 
-## Testar
-
-Em um mundo de TESTE, criar SCP com F6. A opcao de proximidade 2D vem desligada para nao confundir os resultados. Controlar um NPC com G, mirar no SCP de frente por meio segundo. Observar log da trait Witness. Se nao marcar, pressionar F10 olhando de frente e repetir olhando para tras dele: campos `AIM`, `FACE`, `RESULT` explicam o resultado. Se a frente estiver invertida, usar F5 > Inverter sentido do rosto (offset 180). F11 continua como marcacao **manual** de diagnostico. F7 mantido.
-
-Falha segura: se nao for possivel provar que SCP esta sob a mira e de frente, nao aciona. Um objeto atras de uma parede nao deve ser selecionado pelo renderizador, mas a semantica do picker deve ser testada. Nunca usar saves importantes.
+## Instalação
+1. Feche o WorldBox.
+2. Remova todas as pastas antigas `SCP096-TheShyGuy-0.2.x` de `Mods`.
+3. Extraia **somente** a pasta `SCP096-TheShyGuy-0.2.6` deste ZIP em `Mods`.
+4. Abra um mundo de TESTE, gere o SCP. Pressione F5 e clique **Testar som global**.
+5. Confira o `Player.log`, particularmente `Audio FMOD`.
+6. Se o modelo 3D já estava funcionando, não é necessário reinstalar o pack WorldFall.
 
 ```bash
-grep -nE 'SCP096|WorldfallSight|error CS|Exception' ~/.config/unity3d/mkarpenko/WorldBox/Player.log | tail -120
+grep -nE 'SCP096|Audio FMOD|error CS|LocalizedTextManager: missing|Exception' \
+  ~/.config/unity3d/mkarpenko/WorldBox/Player.log | tail -140
 ```
 
-## Referencias e limites
+## Teste das fases
+- DOCILE: choro apenas junto ao SCP.
+- TRIGGERED: aviso global imediatamente, música global 4s após o disparo; tempo total 48s.
+- RAGE: um grito global, seguido de grito em loop SOMENTE perto da criatura.
+- EXECUCAO: efeito local junto da criatura, não do outro lado do mapa.
+- CALMING -> DOCILE: pausa de 15 segundos antes de novas testemunhas.
+- F5 permite testar o cue e música separadamente e alterar fade/opacidade do flash.
 
-- Leia `docs/WORLDFALL_SIGHT_024.md` para a analise da DLL e detalhes de visibilidade e orientacao.
-- Leia `docs/TEST_PLAN.md` para o teste completo em mundo descartavel.
-- O GLB original e o instalador opcional seguem na pasta `Worldfall/`.
-- O pacote nao inclui Worldfall.dll, assemblies da Unity ou arquivos do jogo.
-- Licenciamento da fanwork SCP em `LICENSE.md` e `CREDITS.md`.
+## Licença
+O ZIP `personal-test` inclui apenas para avaliação local mídias enviadas pelo usuário,
+com direitos individuais ainda não verificados. **Não publique esses sons/imagem no
+GitHub nem na Steam Workshop.** O ZIP `code-only` exclui `PrivateMedia`.
 
-## Versao / desenvolvimento
+As alterações são código-fonte novo; arquivos de WorldBox, NML e WorldFall não estão incluídos.
 
-Versionar como `0.2.4-alpha`. Commit: `feat: add experimental Worldfall gaze targeting using render picks and actor facing`.
-
-**Aviso**: analise estatica e inspeção de metadados da DLL efetuadas; ainda nao foi compilado nem executado no jogo do usuario.
