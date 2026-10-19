@@ -8,9 +8,15 @@ namespace SCP096TheShyGuy
 {
     public sealed class ModClass : BasicMod<ModClass>
     {
-        private const string Version = "0.1.6";
+        private const string Version = "0.2.3";
         private const int MaxAttackAttempts = 3;
         private WorldBridge _world;
+        private WorldfallSight _worldfallSight;
+        private bool _worldfallLookEnabled = true;
+        private bool _allowProximityWithWorldfall = false;
+        private float _worldfallLookAt, _worldfallMaxTiles = 35f, _worldfallLookHold = .45f;
+        private float _worldfallRecheckSeconds = .2f;
+        
         private ShyGuyBrain _brain;
         private readonly WitnessQueue _queue = new WitnessQueue();
         private readonly HashSet<object> _sessionOnlyWitnesses = new HashSet<object>();
@@ -42,6 +48,7 @@ namespace SCP096TheShyGuy
         protected override void OnModLoad()
         {
             _world = new WorldBridge();
+            _worldfallSight = new WorldfallSight();
             _brain = new ShyGuyBrain();
             ReadSettings();
             _traitsRegistered = ShyGuyTraits.Register();
@@ -54,7 +61,7 @@ namespace SCP096TheShyGuy
             }
             else Log("Asset pendente: " + reason);
             _initialized = true;
-            Log("v" + Version + " alpha: goTo(WorldTile,bool), cancelAllBeh, witness FIFO + traits, rage-speed, death ACK");
+            Log("v" + Version + " bridge real FirstPerson.WorldBoxMod/get_Host/get_View; F10 diagnostico; F11 TESTE MANUAL aldeao 3D; auto-olhar aguarda validacao GPU");
         }
 
         private void Update()
@@ -72,6 +79,11 @@ namespace SCP096TheShyGuy
             }
             if (Input.GetKeyDown(KeyCode.F8)) CancelTarget();
             if (Input.GetKeyDown(KeyCode.F9)) Diagnostic();
+            // Press while possessing a villager, without opening F5/F2 menus.
+            if (Input.GetKeyDown(KeyCode.F10))
+                Log("CAPTURA F10 (durante jogo): " + _worldfallSight.DetailedSnapshot(_world, _scp));
+            if (Input.GetKeyDown(KeyCode.F11))
+                ManualWorldfallWitness(now);
             if (Input.GetMouseButtonDown(0) && !PointerInsidePanel())
             {
                 if (_placeOnMap) { _placeOnMap = false; SpawnOnClickedTile(); }
@@ -91,6 +103,7 @@ namespace SCP096TheShyGuy
                 _rageTraitApplied = false;
                 _placeOnMap = _selectRemote = false;
                 ResetChaseProgress(now);
+                _worldfallSight.Reset();
             }
 
             if (now >= _scanAt)
@@ -110,6 +123,19 @@ namespace SCP096TheShyGuy
                 }
             }
             if (_scp == null) return;
+
+            // Safe third-person detection: it never guesses actor/model coordinates.
+            // No confirmed Worldfall-owned actor/camera/model => no witness registered.
+            if (_worldfallLookEnabled && now >= _worldfallLookAt)
+            {
+                _worldfallLookAt = now + _worldfallRecheckSeconds;
+                object observer;
+                if (_worldfallSight.Check(_world, _scp, _worldfallMaxTiles, _worldfallLookHold,
+                    now, out observer) && observer != null)
+                    EnqueueWitness(observer, now, "rosto na camera Worldfall (3D)");
+                string transition = _worldfallSight.TakeTransition();
+                if (!string.IsNullOrEmpty(transition)) Log("WorldfallSight: " + transition);
+            }
 
             if (now >= _proximityScanAt)
             {
@@ -191,6 +217,19 @@ namespace SCP096TheShyGuy
             }
         }
 
+        // F11 is a MANUAL integration test, not facial recognition.
+        // Avoids false positives while GPU head/occlusion is being validated.
+        private void ManualWorldfallWitness(float now)
+        {
+            object actor = _worldfallSight.CurrentControlledActor;
+            if (actor == null) { Log("F11: nenhum Actor possuido no WorldFall (ver diagnostico)"); return; }
+            if (_scp == null || !_world.IsAlive(_scp)) { Log("F11: crie o SCP primeiro"); return; }
+            if (!_world.Within(_scp, actor, _worldfallMaxTiles))
+            { Log("F11: jogador distante demais do SCP (limite " + _worldfallMaxTiles + " tiles)"); return; }
+            EnqueueWitness(actor, now, "F11 TESTE MANUAL WorldFall (nao confirma olhar)");
+            UpdateCurrentTarget(now);
+        }
+
         private bool _movementErrorLogged;
         private void LogOnceMovementError()
         {
@@ -220,6 +259,7 @@ namespace SCP096TheShyGuy
                 if (ReferenceEquals(actor, _scp)) continue;
                 if (_queue.Count >= _maxWitnesses) break;
                 bool newlyObserved = _enableProximity &&
+                    (_allowProximityWithWorldfall || !_worldfallSight.Is3DWorldfallView) &&
                     _world.Within(_scp, actor, _proximityDistance);
                 // Full-world trait scan only every 12 seconds, not every frame.
                 if (!newlyObserved && !fullScan) continue;
@@ -325,7 +365,7 @@ namespace SCP096TheShyGuy
             GUI.Box(r, "SCP-096 - THE SHY GUY | v" + Version);
             if (GUI.Button(new Rect(r.x + r.width - 28, r.y + 3, 24, 22), "X")) _showPanel = false;
             Rect viewport = new Rect(r.x + 6, r.y + 28, r.width - 12, r.height - 35);
-            _scroll = GUI.BeginScrollView(viewport, _scroll, new Rect(0, 0, 324, 605));
+            _scroll = GUI.BeginScrollView(viewport, _scroll, new Rect(0, 0, 324, 815));
             float y = 0, x = 3;
             GUI.Label(new Rect(x,y,315,23), "Mapa: " + _world.Readiness); y+=23;
             GUI.Label(new Rect(x,y,315,23), "SCP: " + (_scp != null ? "encontrado" : "nenhum") +
@@ -333,9 +373,11 @@ namespace SCP096TheShyGuy
             GUI.Label(new Rect(x,y,315,23), "Fila de testemunhas: " + _queue.Count +
                 " | Eliminadas: " + _killsConfirmed); y+=23;
             GUI.Label(new Rect(x,y,315,23), "Alvo: " + (_victim == null ? "nenhum" : _world.TargetDistance(_scp, _victim))); y+=25;
+            _worldfallLookEnabled = GUI.Toggle(new Rect(x,y,315,23), _worldfallLookEnabled, "Worldfall: detectar rosto em 3D (seguro)"); y+=24;
+            GUI.Label(new Rect(x,y,315,40), "Visao 3D: " + _worldfallSight.ShortStatus); y+=42;
             _enableChase = GUI.Toggle(new Rect(x,y,315,23), _enableChase, "Perseguir e eliminar"); y+=25;
             _enableProximity = GUI.Toggle(new Rect(x,y,320,23), _enableProximity,
-                "Marcar NPCs a " + _proximityDistance.ToString("0") + " tiles (aproximacao)"); y+=29;
+                "Marcar NPCs a " + _proximityDistance.ToString("0") + " tiles (2D)"); y+=28;
             if (GUI.Button(new Rect(x,y,152,31), "Gerar aqui [F6]")) Spawn(false);
             if (GUI.Button(new Rect(x+160,y,156,31), "Gerar isolado")) Spawn(true);
             y+=38;
@@ -357,7 +399,13 @@ namespace SCP096TheShyGuy
             if (GUI.Button(new Rect(x+160,y,156,29), "Diagnostico [F9]")) Diagnostic();
             y+=37;
             if (GUI.Button(new Rect(x,y,316,31), "Teste: eliminar primeiro alvo")) TestKillVictim();
-            y+=40;
+            y+=36;
+            if (GUI.Button(new Rect(x,y,316,29), "Diagnosticar camera Worldfall"))
+                Log(_worldfallSight.DetailedSnapshot(_world, _scp));
+            y+=35;
+            if (GUI.Button(new Rect(x,y,316,29), "Teste WorldFall: marcar jogador [F11]"))
+                ManualWorldfallWitness(Time.unscaledTime);
+            y+=34;
             GUI.Label(new Rect(x,y,315,20), "Ultimo resultado:"); y+=21;
             GUIStyle feedback = new GUIStyle(GUI.skin.label); feedback.wordWrap = true;
             GUI.Label(new Rect(x,y,314,105), _status, feedback);
@@ -455,6 +503,7 @@ namespace SCP096TheShyGuy
             Log(_world.DiagnosticMethods(_scp));
             Log(_world.DiagnosticShadows());
             Log("Ultimo movimento=" + _world.LastMoveSignature + " ultima execucao=" + _world.LastKillSignature);
+            Log(_worldfallSight.Diagnostic(_world, _scp));
         }
         private void ReadSettings()
         {
@@ -469,6 +518,12 @@ namespace SCP096TheShyGuy
                 _maxWitnesses = (int)ConfigFloat("MaxWitnesses", 64f, 1f, 256f);
                 object proximity = GetConfig()["SCP096"]["ProximityWitnesses"].GetValue();
                 if (proximity is bool) _enableProximity = (bool)proximity;
+                object cameraFlag = GetConfig()["SCP096"]["WorldfallFaceDetection"].GetValue();
+                if (cameraFlag is bool) _worldfallLookEnabled = (bool)cameraFlag;
+                _worldfallMaxTiles = ConfigFloat("WorldfallMaxLookTiles", 35f, 2f, 120f);
+                _worldfallLookHold = ConfigFloat("WorldfallLookHoldSeconds", .45f, .1f, 3f);
+                object allowProximity = GetConfig()["SCP096"]["AllowProximityWhilePossessing"].GetValue();
+                if (allowProximity is bool) _allowProximityWithWorldfall = (bool)allowProximity;
                 object debug = GetConfig()["SCP096"]["DebugLogs"].GetValue();
                 if (debug is bool) _debugLogs = (bool)debug;
             }

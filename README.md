@@ -1,93 +1,30 @@
-# SCP-096: The Shy Guy — v0.1.6-alpha
+# SCP-096 — v0.2.3-alpha | WorldFall Runtime Bridge
 
-**Alvo: WorldBox 0.51.2, build 719 + NeoModLoader em Ubuntu.**
+**Nesta versão a câmera WorldFall não é uma UnityEngine.Camera.** Analisamos a DLL real (`Worldfall.dll`, 16/10/2026), verificando o tipo `FirstPerson.WorldBoxMod` que deriva de `MonoBehaviour` e expõe `get_IsFirstPerson():bool`, `get_Host():Actor` e `get_View():FirstPerson.Core.ViewState` (X,Y,Z,Yaw,Pitch,Fov).
 
-Código experimental preparado a partir de `SCP096 v0.1.4` e da análise do ZIP **The Unrelenting** fornecido pelo usuário. Esta entrega **não foi compilada com Assembly-CSharp.dll nem testada dentro do WorldBox**. Use apenas mundos descartáveis e faça backup de saves importantes.
+## Teste de integração 3D
 
-## O que mudou na v0.1.6
-
-- Corrigidas as chaves de localizacao das traits `trait_ArvakSCP096_Witness` e `trait_ArvakSCP096_RageSpeed` (com textos de descricao `_info`).
-- Inclusos `Locales/en.json`, `Locales/pt_BR.json` e `Locales/pt.json`, seguindo o mesmo formato de chaves usado pelo The Unrelenting.
-- O log de **ataques automaticos** agora registra a distancia real na hora da execucao e o alcance configurado. O botao de teste de morte segue funcionando sem alcance por definicao.
-- Nenhuma alteracao na IA, fila FIFO, trait de velocidade, mecanismo de morte ou assets. A v0.1.5 foi testada pelo usuario e apresentou apenas avisos de localizacao no ultimo relatorio.
-
-## O que mudou na v0.1.5
-
-### 1. Perseguição com API que já funcionou no The Unrelenting
-
-O código antigo priorizava `moveTo(WorldTile)`, que reportava sucesso sem efetivamente deslocar a criatura. O código enviado no The Unrelenting usa:
-
-```csharp
-_host.cancelAllBeh();
-_host.goTo(_target.current_tile, false);
-```
-
-Agora `WorldBridge.TryChase` localiza `goTo(WorldTile, bool)` por reflexão e usa `false` como segundo argumento. A cada três segundos, quando em perseguição, `cancelAllBeh()` interrompe rotinas concorrentes. Os comandos de rota têm intervalos adaptativos (1.6s a 0.18s conforme distância). O método de um parâmetro permanece como fallback de diagnóstico. **Isso não prova ainda travessia de oceanos nem navegação livre de obstáculos.**
-
-### 2. Testemunhas com trait e fila FIFO
-
-- `ArvakSCP096_Witness`: trait própria, pode ser colocada manualmente na lista de traits do jogo, se o registro estiver disponível.
-- `ArvakSCP096_RageSpeed`: trait técnica temporária que dá +85 de velocidade durante RAGE e é removida ao se acalmar.
-- Novas testemunhas entram no **final da fila**, sem duplicatas. O SCP segue sempre o primeiro alvo vivo. Após a morte, passa ao próximo.
-- Qualquer NPC/animal que passe a até **5 tiles** do SCP pode ser marcado automaticamente. Isso é uma **aproximação experimental** do olhar, não uma detecção visual real! A opção vem ligada para facilitar o teste; pode ser desligada no painel ou na configuração. O limite inicial é 64 testemunhas.
-- Durante RAGE, novas unidades que chegam perto também entram no fim da fila.
-- Um scan global de traits ocorre a cada 12 segundos, além do scan de proximidade configurável.
-- A trait persiste pelo mecanismo de traits/salvamento do jogo (a verificar no WorldBox). Ao carregar um mundo, a fila será recriada a partir dos portadores da trait, **mas a ordem histórica original NÃO é preservada** na versão atual.
-
-### 3. Morte e confirmação
-
-`dieSimpleNone()` já eliminou vítimas no teste do usuário. A versão anterior registrava erroneamente falha logo depois da chamada e sucesso no tick seguinte. Agora a execução só é contada como confirmada depois da morte observada. Se o método é chamado sem exceção, a mensagem diz **EXECUCAO SOLICITADA**, não `FALHOU`.
-
-### 4. Visuais
-
-Foram adicionados `swim_0` a `swim_3` para **Main** e **child**, reutilizando os sprites de caminhada originais como placeholders. Foi configurado `texture_path_baby` para a pasta própria e aumentados os valores mínimos de sombra do clone experimental. O resultado visual precisa ser verificado dentro do jogo; não há garantia de eliminação de todos os avisos.
-
-## Instalação limpa
-
-1. Feche WorldBox.
-2. Localize a pasta `Mods` do NeoModLoader. No Ubuntu com Steam, uma instalação frequente é:
-   `~/.steam/debian-installation/steamapps/common/worldbox/Mods`
-3. **Mova todas as pastas anteriores de SCP096 para fora da pasta Mods.** Não altere o The Unrelenting ou WorldFall.
-4. Extraia este ZIP para a pasta `Mods`, ficando:
-   `Mods/SCP096-TheShyGuy-0.1.6/mod.json`.
-5. Abra o jogo e use um **mundo pequeno e descartável**. Confirme no painel a versão `v0.1.5`.
-
-## Controles
-
-| Botão/tecla | Resultado |
-|---|---|
-| F5 | Mostrar/esconder painel |
-| F6 | Gerar próximo ao centro da câmera |
-| Shift + F6 | Gerar isolado |
-| Posicionar SCP no mapa | Gerar clicando no terreno |
-| F7 | Adicionar NPC perto do cursor (raio de 12 tiles) ao final da fila |
-| Shift + F7 | Adicionar unidade viva mais próxima do cursor, sem limite de distância entre SCP e vítima |
-| Escolher alvo mapa | Ativar o modo de marcação: clique depois no mapa perto do NPC (até 12 tiles do clique) |
-| Marcar NPCs a 5 tiles | Liga/desliga o gatilho experimental por proximidade |
-| F8 | Cancelar toda a fila, retirar as traits Witness das vítimas encontradas |
-| Teste: humano | Criar humano para teste |
-| Teste: eliminar primeiro alvo | Executar comando de morte sem requisito de distância (somente teste) |
-| F9 | Diagnóstico no Player.log |
-
-## Limitações assumidas
-
-- Não há leitura do rosto, direção da câmera do WorldFall, obstrução visual nem fotografias.
-- Não há persistência confiável da **ordem** FIFO entre sessões; a lista é reconstruída pela leitura das traits salvas.
-- A criatura é clonada a partir de `sheep` para impedir comportamento de aldeão; atributos de espécie/animações ainda podem demandar ajustes.
-- Perseguição transoceânica, gelo e liberação de trajetos presos não implementados.
-- Mudança de velocidade depende de a engine recalcular o bônus ao colocar a trait na unidade.
-- O conjunto de sprites é incompleto para funcionalidades futuras. Correções atuais são hipóteses para os erros registrados.
-- WorldFall não foi carregado nem inspecionado nesta entrega; eventuais exceções `FirstPerson` devem ser investigadas separadamente.
-
-## Logs
+1. Remova a instalação anterior e extraia só `SCP096-TheShyGuy-0.2.3` em `worldbox/Mods`.
+2. Abra um **mundo descartável**, crie o SCP com F6, selecione um aldeão e entre no WorldFall usando G.
+3. Na primeira pessoa, aproxime-se do SCP. O log deve indicar `WORLD FALL 3D ATIVO: Host=Actor`.
+4. Pressione F10 para gerar diagnóstico manual **ou** acompanhe o registro automático de transição. Se F10 não funcionar, o log automático é suficiente para comprovar o estado.
+5. **F11 = teste manual:** marca o aldeão atualmente controlado (dentro do alcance configurado). Não significa reconhecimento facial; serve para verificar o vínculo do Actor à fila e à perseguição já funcional.
+6. Saia de primeira pessoa e confira a fila/execução.
 
 ```bash
-grep -nE 'SCP096|ActorAssetLibrary|Shadow size|Exception|goTo|MORTE' \
-~/.config/unity3d/mkarpenko/WorldBox/Player.log | tail -180
+grep -nE 'SCP096|WorldfallSight|WORLD FALL 3D|error CS|Exception' ~/.config/unity3d/mkarpenko/WorldBox/Player.log | tail -150
 ```
 
-Em especial, confirme que constam `v0.1.5 alpha`, `Traits: registradas` e `Perseguicao: Actor.goTo(WorldTile,Boolean)`.
+## Limitação
 
-## Licenciamento
+A observação **automática do rosto ainda não está habilitada**. A DLL mostra que o WorldFall desenha a cena num renderizador 3D próprio (`FirstPerson.Gpu.GpuRenderer`, com `PickTag`, `PickDepth`, `RequestPick`) e não num conjunto de `UnityEngine.Camera` e `Transform` por criatura. A correspondência entre o código de picking, o Actor e **a cabeça visível**, incluindo a checagem de obstáculos, ainda exige validação. Não iremos ativar falso positivo ao ver alguém de costas ou atrás de uma parede.
 
-SCP-096 foi criado por **Dr Dan** no site SCP Wiki e está sujeito à licença Creative Commons BY-SA 3.0. Consulte `CREDITS.md` e `LICENSE.md`. As artes desta versão são recursos próprios do projeto; áudio do The Unrelenting não foi copiado.
+A lógica de spawn, traits, FIFO, ataque fatal e `Actor.moveTo(WorldTile)` da versão 0.1.6 foi preservada. A marcação por proximidade 2D pode continuar habilitada em modo mapa; ao entrar em primeira pessoa, ela é suspensa por padrão.
+
+Veja `docs/WORLDFALL_INSPECTION.md` para detalhes da inspeção.
+
+## Atualização GitHub
+
+Substituir: `ModClass.cs`, `src/WorldfallSight.cs`, `mod.json`, `README.md`, `CHANGELOG.md`, `docs/TEST_PLAN.md`. Adicionar: `docs/WORLDFALL_INSPECTION.md`. Remover: nenhum arquivo (apague apenas instalações antigas). Versionar como `0.2.3-alpha`. Commit: `feat: bridge Worldfall possession and view state from inspected assembly`.
+
+**Status:** análise estática concluída; não compilado contra as DLLs do jogo nem testado in-game neste ambiente.

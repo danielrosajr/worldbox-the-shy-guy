@@ -7,10 +7,10 @@ import struct
 root = Path(__file__).resolve().parents[1]
 manifest = json.loads((root / 'mod.json').read_text())
 config = json.loads((root / 'default_config.json').read_text())
-assert manifest['version'] == '0.1.6'
+assert manifest['version'] == '0.2.3'
 assert manifest['name'] == 'SCP-096 The Shy Guy'
 assert 'SCP096' in config and all(x['Id'] for x in config['SCP096'])
-for f in ['ModClass.cs', 'src/WorldBridge.cs', 'src/Reflect.cs', 'src/StateMachine.cs', 'src/WitnessQueue.cs', 'src/Traits.cs']:
+for f in ['ModClass.cs', 'src/WorldBridge.cs', 'src/Reflect.cs', 'src/StateMachine.cs', 'src/WitnessQueue.cs', 'src/Traits.cs', 'src/WorldfallSight.cs']:
     code = (root / f).read_text()
     assert code.count('{') == code.count('}'), f
     assert 'SCP096TheShyGuy' in code
@@ -51,3 +51,17 @@ for lang in ('en', 'pt_BR', 'pt'):
         assert loc.get('trait_' + trait + '_info'), (lang, trait, 'info missing')
 assert 'distancia no ataque=' in (root / 'ModClass.cs').read_text()
 print('PASS: trait localizations and attack-range diagnostics.')
+
+# Optional Worldfall pack is a genuine binary glTF 2.0 .glb and never bundles Worldfall.dll.
+pack = root / 'Worldfall'
+glb = (pack / 'models/animal_scp096_shyguy.glb').read_bytes()
+assert glb[:4] == b'glTF' and struct.unpack('<I', glb[4:8])[0] == 2
+meta = json.loads((pack / 'worldfall.json').read_text())
+assert meta['id'] == 'arvak_scp096_worldfall'
+assert 'WorldfallFaceDetection' in [x['Id'] for x in config['SCP096']]
+assert b'Worldfall.dll' not in glb
+print('PASS: Worldfall 3D model GLB header, pack metadata, optional detection configuration.')
+
+# Regression: v0.2.0 accidentally referenced an undeclared field and did not compile.
+assert '_worldfallSightLogged' not in (root / 'ModClass.cs').read_text()
+print('PASS: missing-field CS0103 regression guard.')

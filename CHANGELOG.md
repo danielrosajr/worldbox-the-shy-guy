@@ -1,71 +1,43 @@
-# CHANGELOG
-
-## 0.1.6-alpha — 18/10/2026
-- Corrige erros `LocalizedTextManager: missing text: trait_ArvakSCP096_Witness` e `trait_ArvakSCP096_RageSpeed`, adicionando IDs corretos de nome e descricao.
-- Adiciona traducao brasileira e `Locales/pt.json`, usando convencao ja comprovada no The Unrelenting.
-- Inclui no log a distancia ao executar cada ataque automatico, para distinguir perseguicao real de morte remota.
-- Mantem as mecanicas da v0.1.5 sem alteracoes, incluindo a selecao, fila de alvos e regras de alcance.
-- Validacao estrutural apenas; pacote nao compilado/testado no WorldBox desta sessao.
-
-
-## 0.1.5-alpha — 18/10/2026
-- Reaproveita do The Unrelenting o padrão `Actor.cancelAllBeh()` + `Actor.goTo(WorldTile, false)` e intervalos adaptativos de navegação.
-- Adiciona `ArvakSCP096_Witness`, trait `ArvakSCP096_RageSpeed` (+85 speed) e fila FIFO de testemunhas com máximo configurável.
-- Marca por proximidade <=5 tiles por padrão como aproximação temporária, configurável no NML e painel; leitura de rosto permanece pendente.
-- Varre traits a cada 12s para restaurar fila de portadores após carregar mundo, sem garantia de preservar a ordem histórica.
-- Corrige classificação prematura de falha de `dieSimpleNone()` aguardando confirmação posterior.
-- Complementa animações `swim_0`..`swim_3`, redireciona `texture_path_baby` e ajusta shadow_size mínimo experimentalmente.
-- Seleção distante pode ser ativada pelo botão Escolher alvo mapa e clique posterior; Shift+F7 seleciona o NPC mais próximo do cursor sem limite de raio.
-- Testes estáticos apenas; execução no jogo e compatibilidade WorldFall pendentes.
-
-
-## 0.1.4-alpha — 18/10/2026
-- Troca template humano por template selvagem `sheep` para evitar comportamentos civilizados e construcao de aldeias.
-- Reintroduz tentativa de carregamento sprite exclusivo SCP com referencias herdadas de sombra e recursos infantis.
-- Adiciona modo experimental de alvo global sem limite de distancia, separado de F7 proximo ao cursor.
-- DiagnosticReadiness/F9 inclui origem, status visual, flags efetivamente desativadas.
-- Reforca aviso de instalacao limpa e identifica v0.1.2 ainda carregada no log recebido.
-- Mantem teste de morte da v0.1.3 (so confirmado apos teste local do usuario).
-
-# CHANGELOG
-
-## 0.1.3-alpha — 18/10/2026
-- Troca tentativa especulativa `die()`/`killHimself()` por `Actor.dieSimpleNone()` (evidencia externa, WorldBox 0.51.2 build 719).
-- Confere registro `units_only_alive` antes/depois da chamada: nao considera sucesso somente por reflexao sem excecao.
-- Adiciona teste de morte manual separado da perseguicao.
-- Limita a tres tentativas de morte por alvo, com 2s de espacamento e logs claros.
-- Diagnostico F9 de campos de sombra do asset SCP e humano. Avisos ainda nao corrigidos.
-- Nenhuma mudanca no algoritmo de navegacao; perseguição permanece experimental.
-
 # Changelog
 
-## 0.1.2-alpha — diagnostico de movimento e estabilidade visual
-
-- Corrigido o codigo responsavel pelos avisos de sprites baby/child e sombras 0x0: o novo ator nao substitui mais o `texture_asset` herdado do humano por um asset incompleto.
-- Sprites SCP seguem disponiveis no pacote, mas desabilitados temporariamente no jogo ate validar carregamento 2D completo. O ator pode aparecer com visual de humano por enquanto.
-- Painel agora mostra distancia ao alvo em tiles.
-- Adicionado controle para suspender perseguição/ataque sem desinstalar o mod, permitindo diagnosticar erro possivelmente relacionado a `FirstPerson`.
-- Reenvio de comandos de perseguição reduzido de 0,75s para 1,5s; emite aviso se o SCP ficar parado durante RAGE, sem teleportes de risco.
-- Preservada geracao manual e fluxo original de estados.
-- Nao corrigido: `NullReferenceException` em `FirstPerson.WalkPace.Step`, cuja causa requer teste de isolamento/assemblies.
+## v0.2.3-alpha
+- Integração com a instância real `FirstPerson.WorldBoxMod`, obtida de `MonoBehaviour`.
+- Descoberta e leitura de `get_IsFirstPerson`, `get_Host`, `get_View`, `ViewState` (posição e orientação).
+- Diagnósticos automáticos ao entrar/sair do WorldFall; F10 detalhado.
+- F11 marca manualmente o ator controlado no 3D para teste de integração, respeitando distância e sem ativação visual fictícia.
+- Detecção automática de rosto mantida desativada até validar o GPU picking de cabeça e obstáculos.
+- Lógica de perseguição e eliminação da v0.1.6 preservada.
 
 # CHANGELOG
 
-## v0.1.1-alpha — Diagnostico de geracao e painel visivel (2026-10-18)
+## 0.2.2-alpha (Worldfall camera diagnostics)
 
-### Corrigido
-- Painel IMGUI em tela com status do mapa, registro do asset e confirmacao da ultima acao.
-- F6 agora tenta criar o SCP em terreno no centro da tela; spawn isolado passou para Shift+F6.
-- Novo modo de posicionamento: clicar no mapa para escolher onde criar o SCP.
-- Acesso a erro de registro e falha de spawn sem precisar abrir o log antes.
-- Botao `Teste: humano` distingue problemas na criacao de unidades de problemas no asset customizado.
-- Parametro `adult=true` ao gerar unidades onde a assinatura do jogo o permitir.
-- Comandos para log e diagnostico da assinatura de clone, spawn, tiles e unidades.
+- Log de transicao entre perspectiva 3D e camera 2D; uma vez por transicao, nao por frame.
+- F10 grava captura detalhada de camera e campos FirstPerson em tempo de jogo, sem abrir painel.
+- Retirada a exigencia arbitraria de camera ocupando 65% da tela; ainda requer camera perspectiva ativa.
+- Registro da ultima camera perspectiva vista no diagnostico, mesmo apos retornar ao mapa.
+- Preservados spawn, traits, fila FIFO, movimento, ataque e morte da baseline v0.1.6.
+- Detecao automatica continua experimental; nao prometer ativacao se Worldfall nao expuser o Actor, a cabeca e o collider.
 
-### Limitacoes
-- Nenhum teste executado no WorldBox local do usuario.
-- API de clone e compatibilidade do sprite/IA ainda precisam das DLLs ou do Player.log real.
+# Changelog — SCP-096 The Shy Guy
 
-## v0.1.0-alpha — Primeiro prototipo
-- Registro experimental do SCP, sprites, maquina de estados e hotkeys basicos.
-- Perseguicao e ataque dependentes de reflexao em runtime ainda nao validados.
+## 0.2.1-alpha — Hotfix de compilação
+
+- FIX: removida referência a `_worldfallSightLogged` em `ModClass.cs` (CS0103). O campo não existia e não era necessário.
+- KEEP: lógica de perseguir, fila FIFO, traits, eliminação e protótipo 3D/visão experimental da v0.2.0.
+- TEST: validação estática do pacote e verificação de ausência da referência inválida. **Não compilado dentro do NML** e **não testado no jogo**.
+
+## 0.2.0-alpha — Worldfall / first-person preview
+
+- ADD: `src/WorldfallSight.cs` — inspeção opcional de câmera, personagem controlado, componente 3D do SCP, orientação frontal da cabeça e oclusão por raycast; falha segura quando não consegue confirmar rosto visível.
+- ADD: modelo humanoide GLB original e `Worldfall/worldfall.json` (pack ativado separadamente em F2 > Mods), sem DLL de terceiro.
+- ADD: `scripts/install-worldfall-pack.sh`, diagnóstico de câmera no painel, configurações de alcance e tempo mínimo do olhar.
+- CHANGE: desativa automaticamente a marcação por proximidade de 5 tiles **durante a câmera 3D do Worldfall** (a menos que explicitamente permitido em config). No WorldBox 2D permanece disponível.
+- KEEP: sistema de traits, fila FIFO, spawn selvagem, `moveTo` fallback, limite de 1.7 tiles e `dieSimpleNone()` da base v0.1.6 testada.
+- KNOWN: renderização GPU do Worldfall talvez não exponha um Transform/collider individual por unidade; modo estrito não dispara sem isso. Precisa da DLL local para validação real da ponte.
+
+## 0.1.6-alpha
+
+- FIX: chaves localizadas de Witness e RageSpeed.
+- ADD: distância real registrada na hora da execução.
+- Testada pelo usuário no WorldBox 0.51.2 (build 719): perseguição, fila, morte e retorno ao estado passivo.
