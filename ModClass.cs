@@ -8,16 +8,19 @@ namespace SCP096TheShyGuy
 {
     public sealed class ModClass : BasicMod<ModClass>
     {
-        private const string Version = "0.2.9";
+        private const string Version = "0.2.12";
         private const int MaxAttackAttempts = 3;
         private WorldBridge _world;
         private WorldfallSight _worldfallSight;
         private ShyGuyAudio _audio;
         private DynamicMusicController _music;
         private ShyGuyOverlay _overlay;
+        private WorldfallDreadFilter _dread;
+        private bool _dreadEnabled = true, _dreadPreview;
+        private float _dreadStrength = .85f;
         private object _localThreatActor, _pendingLocalDeath;
         private bool _testMusicOverride, _musicOverrideEnabled = true;
-        private float _musicFadeDown = 2.8f, _musicFadeUp = 3.5f, _musicDuckingPercent = 100f;
+        private float _musicFadeDown = .5f, _musicFadeUp = 3.5f, _musicDuckingPercent = 100f;
         private bool _deathFlashEnabled = true;
         private float _deathFlashDuration = 2.6f;
         private float _cooldownUntil, _cooldownSeconds = 15f;
@@ -83,6 +86,9 @@ namespace SCP096TheShyGuy
             _music.FadeDownSeconds = _musicFadeDown;
             _music.FadeUpSeconds = _musicFadeUp;
             _music.DuckFraction = _musicDuckingPercent / 100f;
+            _dread = new WorldfallDreadFilter(Log);
+            _dread.Enabled = _dreadEnabled;
+            _dread.Strength = _dreadStrength;
             _overlay = new ShyGuyOverlay(_audio.FaceImage, Log);
             _overlay.Enabled = _visualCueEnabled;
             _traitsRegistered = ShyGuyTraits.Register();
@@ -95,7 +101,7 @@ namespace SCP096TheShyGuy
             }
             else Log("Asset pendente: " + reason);
             _initialized = true;
-            Log("v" + Version + " WorldFall Canvas overlay + dynamic BGM override; FMOD + chase preserved");
+            Log("v" + Version + " WORLD FALL MUSIC GROUP + DREAD POV: native _music group, per-target 3D shading; preserve FIFO chase");
         }
 
         private void Update()
@@ -112,7 +118,15 @@ namespace SCP096TheShyGuy
                 else MarkVictim(now);
             }
             if (Input.GetKeyDown(KeyCode.F8)) CancelTarget();
-            if (Input.GetKeyDown(KeyCode.F9)) Diagnostic();
+            if (Input.GetKeyDown(KeyCode.F9))
+            {
+                if (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift))
+                {
+                    _dreadPreview = !_dreadPreview;
+                    Log("DREAD POV: preview SHIFT+F9=" + _dreadPreview);
+                }
+                else Diagnostic();
+            }
             // Press while possessing a villager, without opening F5/F2 menus.
             if (Input.GetKeyDown(KeyCode.F10))
             {
@@ -145,13 +159,17 @@ namespace SCP096TheShyGuy
                 _localThreatActor = _pendingLocalDeath = null;
                 _testMusicOverride = false;
                 if (_music != null) _music.RestoreImmediately();
+            if (_dread != null) _dread.RestoreImmediately();
                 if (_overlay != null) _overlay.Reset();
                 return;
             }
             if (!ReferenceEquals(_observedMap, _world.Map))
             {
-                if (_audio != null) _audio.Reset();
+                _dreadPreview = false;
+            if (_dread != null) _dread.RestoreImmediately();
+            if (_audio != null) _audio.Reset();
                 if (_music != null) _music.RestoreImmediately();
+            if (_dread != null) _dread.RestoreImmediately();
                 if (_overlay != null) _overlay.Reset();
                 _localThreatActor = _pendingLocalDeath = null;
                 _testMusicOverride = false;
@@ -181,8 +199,11 @@ namespace SCP096TheShyGuy
                     _queue.Clear();
                     _sessionOnlyWitnesses.Clear();
                     _brain.Reset(now);
-                    if (_audio != null) _audio.Reset();
+                    _dreadPreview = false;
+            if (_dread != null) _dread.RestoreImmediately();
+            if (_audio != null) _audio.Reset();
                     if (_music != null) _music.RestoreImmediately();
+            if (_dread != null) _dread.RestoreImmediately();
                     if (_overlay != null) _overlay.Reset();
                     _localThreatActor = _pendingLocalDeath = null;
                     _testMusicOverride = false;
@@ -268,10 +289,13 @@ namespace SCP096TheShyGuy
 
             if (_music != null)
             {
-                bool markedPlayerAlive = _localThreatActor != null && _world.IsAlive(_localThreatActor);
-                bool stillThreatening = _brain.State == ShyGuyState.Triggered || _brain.State == ShyGuyState.Rage;
-                // Keep ducking throughout the entire chase, NOT just the trigger timer.
-                _music.Request(_testMusicOverride || (markedPlayerAlive && stillThreatening));
+                // Global soundtrack silence: an NPC seeing SCP-096 triggers the exact
+                // same music override as the possessed player. Never use possession,
+                // camera, or the current queue head to decide whether BGM is muted.
+                // Restores on Rage -> Calming once the last witness is gone.
+                bool activeHunt = _brain.State == ShyGuyState.Triggered ||
+                    _brain.State == ShyGuyState.Rage;
+                _music.Request(_testMusicOverride || activeHunt);
             }
             if (_audio != null) _audio.Update(now, _brain.State, _world, _scp, _worldfallSight);
 
@@ -436,6 +460,8 @@ namespace SCP096TheShyGuy
                 _brain.Transition(ShyGuyState.Triggered, now, "primeira testemunha: " + source))
             {
                 if (_audio != null) _audio.StateChanged(ShyGuyState.Triggered, now);
+                // Start global soundtrack silence immediately, including 2D NPC events.
+                if (_music != null) _music.Request(true);
             }
             if (_audio != null)
             {
@@ -556,17 +582,28 @@ namespace SCP096TheShyGuy
         {
             if (!_initialized) return;
             if (_music != null) _music.Tick(Time.unscaledTime, Time.unscaledDeltaTime);
+            if (_dread != null)
+            {
+                bool targetedPlayer = _worldfallSight != null && _worldfallSight.IsPossessing &&
+                    _victim != null && ReferenceEquals(_victim, _worldfallSight.CurrentControlledActor) &&
+                    _brain != null && (_brain.State == ShyGuyState.Triggered || _brain.State == ShyGuyState.Rage);
+                _dread.Tick(Time.unscaledTime, Time.unscaledDeltaTime,
+                    (targetedPlayer || _dreadPreview) &&
+                    _worldfallSight != null && _worldfallSight.Is3DWorldfallView);
+            }
             if (_overlay != null) _overlay.LateUpdate(
                 _worldfallSight != null && _worldfallSight.Is3DWorldfallView);
         }
         private void OnDisable()
         {
             if (_music != null) _music.RestoreImmediately();
+            if (_dread != null) _dread.RestoreImmediately();
             if (_overlay != null) _overlay.Reset();
         }
         private void OnDestroy()
         {
             if (_music != null) _music.RestoreImmediately();
+            if (_dread != null) _dread.RestoreImmediately();
             if (_overlay != null) _overlay.Destroy();
         }
         private void OnGUI()
@@ -594,7 +631,7 @@ namespace SCP096TheShyGuy
             GUI.Box(r, "SCP-096 - THE SHY GUY | v" + Version);
             if (GUI.Button(new Rect(r.x + r.width - 28, r.y + 3, 24, 22), "X")) _showPanel = false;
             Rect viewport = new Rect(r.x + 6, r.y + 28, r.width - 12, r.height - 35);
-            _scroll = GUI.BeginScrollView(viewport, _scroll, new Rect(0, 0, 324, 1330));
+            _scroll = GUI.BeginScrollView(viewport, _scroll, new Rect(0, 0, 324, 1510));
             float y = 0, x = 3;
             GUI.Label(new Rect(x,y,315,23), "Mapa: " + _world.Readiness); y+=23;
             GUI.Label(new Rect(x,y,315,23), "SCP: " + (_scp != null ? "encontrado" : "nenhum") +
@@ -643,7 +680,7 @@ namespace SCP096TheShyGuy
                 if (_music != null)
                 {
                     _music.Enabled = GUI.Toggle(new Rect(x,y,315,23), _music.Enabled,
-                        "Silenciar BGM somente quando voce for vitima");
+                        "Silenciar trilhas do jogo durante TRIGGERED/RAGE");
                     y += 26;
                 }
                 if (GUI.Button(new Rect(x,y,152,28), _testMusicOverride ? "Restaurar BGM" : "Testar silenciar BGM"))
@@ -663,6 +700,18 @@ namespace SCP096TheShyGuy
                 _deathFlashEnabled = GUI.Toggle(new Rect(x,y,315,23), _deathFlashEnabled,
                     "Jumpscare apenas na morte pelo SCP");
                 y+=27;
+                if (_dread != null)
+                {
+                    _dread.Enabled = GUI.Toggle(new Rect(x,y,315,23), _dread.Enabled,
+                        "POV macabro para a proxima vitima WorldFall"); y+=25;
+                    GUI.Label(new Rect(x,y,315,20), "Escuridao 3D: " +
+                        (_dread.Strength * 100f).ToString("0") + "%"); y+=21;
+                    _dread.Strength = GUI.HorizontalSlider(new Rect(x,y+2f,315,15),
+                        _dread.Strength, 0f, 1f); y+=22;
+                    if (GUI.Button(new Rect(x,y,316,26), _dreadPreview ? "Parar preview de medo" : "Preview POV macabro [Shift+F9]"))
+                        _dreadPreview = !_dreadPreview;
+                    y+=32;
+                }
                 GUI.Label(new Rect(x,y,315,22), "Override: " + (_music == null ? "n/a" : _music.Status));
                 y+=26;
             }
@@ -732,9 +781,12 @@ namespace SCP096TheShyGuy
             _queue.Clear();
             _brain.Reset(Time.unscaledTime);
             _cooldownUntil = 0f;
+            _dreadPreview = false;
+            if (_dread != null) _dread.RestoreImmediately();
             if (_audio != null) _audio.Reset();
             if (_overlay != null) _overlay.Reset();
             if (_music != null) _music.RestoreImmediately();
+            if (_dread != null) _dread.RestoreImmediately();
             _localThreatActor = _pendingLocalDeath = null;
             ResetChaseProgress(Time.unscaledTime);
             Log("SCP-096 criado em " + _world.TileCoordinates(tile) + "; visual=" + _world.AppearanceStatus);
@@ -798,7 +850,8 @@ namespace SCP096TheShyGuy
             Log(_world.DiagnosticShadows());
             Log("Ultimo movimento=" + _world.LastMoveSignature + " ultima execucao=" + _world.LastKillSignature);
             Log("MUSIC=" + (_music == null ? "null" : _music.Status) +
-                " OVERLAY=" + (_overlay == null ? "null" : _overlay.Status));
+                " OVERLAY=" + (_overlay == null ? "null" : _overlay.Status) +
+                " DREAD=" + (_dread == null ? "null" : _dread.Status));
             Log("Audio=" + (_audio == null ? "null" : _audio.Summary) +
                 " cooldownRestante=" + Mathf.Max(0f, _cooldownUntil - Time.unscaledTime).ToString("0.0"));
             Log(_worldfallSight.Diagnostic(_world, _scp));
@@ -834,9 +887,12 @@ namespace SCP096TheShyGuy
                     if (v is bool) _musicOverrideEnabled = (bool)v;
                 }
                 catch { }
-                _musicFadeDown = ConfigFloatOptional("MusicFadeDownSeconds", 2.8f, .2f, 12f);
+                _musicFadeDown = ConfigFloatOptional("MusicFadeDownSeconds", .5f, .2f, 12f);
                 _musicFadeUp = ConfigFloatOptional("MusicFadeUpSeconds", 3.5f, .2f, 12f);
                 _musicDuckingPercent = ConfigFloatOptional("MusicDuckingPercent", 100f, 0f, 100f);
+                try { object v = GetConfig()["SCP096"]["DreadVisionEnabled"].GetValue();
+                    if (v is bool) _dreadEnabled = (bool)v; } catch { }
+                _dreadStrength = ConfigFloatOptional("DreadVisionStrength", .85f, 0f, 1f);
                 _calmingDelay = ConfigFloat("CalmingDelay", 4f, 0f, 120f);
                 _tickSeconds = ConfigFloat("TickSeconds", .25f, .1f, 5f);
                 _attackDistance = ConfigFloat("AttackDistance", 1.7f, .5f, 10f);

@@ -7,10 +7,10 @@ import struct
 root = Path(__file__).resolve().parents[1]
 manifest = json.loads((root / 'mod.json').read_text())
 config = json.loads((root / 'default_config.json').read_text())
-assert manifest['version'] == '0.2.9'
+assert manifest['version'] == '0.2.12'
 assert manifest['name'] == 'SCP-096 The Shy Guy'
 assert 'SCP096' in config and all(x['Id'] for x in config['SCP096'])
-for f in ['ModClass.cs', 'src/WorldBridge.cs', 'src/Reflect.cs', 'src/StateMachine.cs', 'src/WitnessQueue.cs', 'src/Traits.cs', 'src/WorldfallSight.cs','src/DynamicMusicController.cs','src/ShyGuyOverlay.cs']:
+for f in ['ModClass.cs', 'src/WorldBridge.cs', 'src/Reflect.cs', 'src/StateMachine.cs', 'src/WitnessQueue.cs', 'src/Traits.cs', 'src/WorldfallSight.cs','src/DynamicMusicController.cs','src/ShyGuyOverlay.cs','src/WorldfallDreadFilter.cs']:
     code = (root / f).read_text()
     assert code.count('{') == code.count('}'), f
     assert 'SCP096TheShyGuy' in code
@@ -102,8 +102,21 @@ overlay=(root/'src/ShyGuyOverlay.cs').read_text()
 assert 'WorldFall' in overlay and 'sortingOrder' in overlay and '32767' in overlay
 assert 'DontDestroyOnLoad' in overlay and 'RawImage' in overlay
 assert 'unscaledDeltaTime' in mod and 'ReferenceEquals(candidate, _worldfallSight.CurrentControlledActor)' in mod
-assert 'stillThreatening' in mod and 'ConfirmLocalDeath' in mod
+assert 'activeHunt' in mod and 'ConfirmLocalDeath' in mod
 assert 'getBus' in music and 'getVolume' in music and 'setVolume' in music
 assert 'RestoreImmediately' in music and 'FadeDownSeconds' in music
 assert 'Shift' not in 'unused-check'
 print('PASS: WorldFall canvas, preview, death event guard, and music snapshots; NOT compiled.')
+
+# v0.2.10: silence game music globally during the SCP threat.
+assert 'bool activeHunt = _brain.State == ShyGuyState.Triggered' in mod
+assert '_music.Request(_testMusicOverride || activeHunt)' in mod
+assert 'markedPlayerAlive' not in mod
+assert 'FirstPerson.WorldBoxMod' in music and 'MusicVolume' in music
+print('PASS: global hunt music override, including WorldFall FirstPersonAudio bridge.')
+
+# v0.2.12 hotfix: FMOD.Core.ChannelGroup vs FMOD.Studio.Bus overloads.
+assert 'group.getVolume(out checkVolume)' in music
+assert 'group.getVolume(out checkVolume, out finalVolume)' not in music
+assert 'found.getVolume(out original, out final)' in music
+print('PASS: FMOD Core ChannelGroup one-out-param / Studio Bus two-out-param regressions.')

@@ -148,7 +148,7 @@
     {
       "Id": "MusicFadeDownSeconds",
       "Type": "TEXT",
-      "TextVal": "2.8"
+      "TextVal": "0.5"
     },
     {
       "Id": "MusicFadeUpSeconds",
@@ -159,6 +159,16 @@
       "Id": "MusicDuckingPercent",
       "Type": "TEXT",
       "TextVal": "100"
+    },
+    {
+      "Id": "DreadVisionEnabled",
+      "Type": "SWITCH",
+      "BoolVal": true
+    },
+    {
+      "Id": "DreadVisionStrength",
+      "Type": "TEXT",
+      "TextVal": "0.85"
     }
   ]
 }

@@ -58,9 +58,9 @@
   "DeathFlashEnabled": "Show flash on SCP-killed player",
   "DeathFlashDuration Description": "Duration of the image after the SCP kills the controlled actor.",
   "DeathFlashEnabled Description": "Only on kills performed by the SCP-096, not on ordinary deaths.",
-  "MusicOverrideEnabled": "Mute game soundtrack when you are the witness",
-  "MusicOverrideEnabled Description": "Does not change game SFX or SCP custom audio.",
-  "MusicFadeDownSeconds": "Soundtrack fade-out time (seconds)",
+  "MusicOverrideEnabled": "Mute game soundtracks during every SCP-096 hunt",
+  "MusicOverrideEnabled Description": "When any witness triggers SCP-096, mute WorldBox and WorldFall background music throughout TRIGGERED and RAGE, regardless of player possession. Keep ambience, SFX and SCP custom sounds.",
+  "MusicFadeDownSeconds": "Global game music fade-out (seconds)",
   "MusicFadeDownSeconds Description": "Only the game music is lowered.",
   "MusicFadeUpSeconds": "Soundtrack fade-in time (seconds)",
   "MusicFadeUpSeconds Description": "Original music volume is restored after the chase.",
@@ -79,5 +79,9 @@
   "trait_ArvakSCP096_RageSpeed3": "SCP-096 Accelerated Rage",
   "trait_ArvakSCP096_RageSpeed3_info": "A temporary, mutually exclusive speed stage during pursuit.",
   "trait_ArvakSCP096_RageSpeed4": "SCP-096 Accelerated Rage",
-  "trait_ArvakSCP096_RageSpeed4_info": "A temporary, mutually exclusive speed stage during pursuit."
+  "trait_ArvakSCP096_RageSpeed4_info": "A temporary, mutually exclusive speed stage during pursuit.",
+  "DreadVisionEnabled": "Ominous WorldFall POV for current victim",
+  "DreadVisionEnabled Description": "Darkens the 3D renderer when the possessed character is the current SCP-096 target; never affects map mode.",
+  "DreadVisionStrength": "Dread vision intensity (0–1)",
+  "DreadVisionStrength Description": "Adjusts vignette and shadows in the native 3D renderer; lower it for less darkness."
 }

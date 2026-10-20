@@ -1,15 +1,22 @@
-# CHANGELOG
+# Changelog
 
-## 0.2.9-alpha — O Implacável
-- Ajuste experimental do flash em WorldFall 3D com um apresentador IMGUI tardio independente do Canvas.
-- Diagnóstico do flash: conta os frames de desenho no último passe (`lateGuiFrames`).
-- Aumenta a vida base da criatura de 10.000 para 40.000 para novos spawns.
-- Adiciona regeneração gradual via `Actor.restoreHealth(Int32)` (700/2000 HP por segundo, configurável), sem imortalidade.
-- Aceleração por vítima em RAGE, com quatro traits mutuamente exclusivas: +85/+105/+125/+145 de velocidade ao longo de 45 segundos. Ao trocar alvo, reinicia no estágio zero.
-- Preserva áudio FMOD, bus musical, cooldown, fila FIFO, o gatilho do WorldFall e o ataque a curta distância.
-- Novas traduções e configurações para regeneração/aceleração.
-- Testes estáticos concluídos; verificação dentro do jogo pendente.
+## v0.2.12-alpha — Compile hotfix CS1501
+- Corrige `src/DynamicMusicController.cs`: FMOD Core `ChannelGroup.getVolume(out float)` aceita UM argumento de saída.
+- Mantém `FMOD.Studio.Bus.getVolume(out float, out float)` com DOIS argumentos, pois é outra API.
+- Não altera estados, IA, aceleração, áudio próprio do SCP, Canvas nem vinheta do WorldFall.
+- Aviso: correção verificada estaticamente, ainda precisa da compilação via NML.
 
-## 0.2.8-alpha — Immersion
-- Flash por Canvas Unity e controlador de música original isolado via FMOD bus.
-- Som customizado permanece audível, áudio ambiente inalterado.
+# Changelog
+
+## v0.2.12-alpha — Native Music Group & Dread POV
+- Investigação estrutural da DLL do WorldFall: `FirstPersonAudio._music` é `FMOD.ChannelGroup`, separado dos efeitos ambientes.
+- Silenciamento da trilha nativa do WorldFall no grupo `_music`, com snapshot/restauração de volume e estado mute; `bus:/Music` do WorldBox permanece controlado.
+- Novo `WorldfallDreadFilter`: vinheta e sombras nativas mais fortes apenas enquanto o personagem controlado é a **próxima vítima** do SCP-096.
+- Prévia de escuridão via `Shift+F9` no WorldFall 3D; opção de ativar e regular a intensidade pelo painel F5/configurações.
+- Não altera visual do mapa 2D, nem outros NPCs; restaura parâmetros originais quando o filtro é desativado.
+- Mantidos FMOD do SCP, áudio ambiente, regeneração, aceleração limitada por vítima, cooldown, fila FIFO e detecção 3D.
+- Componentes específicos do WorldFall são opcionais. Sem Harmony nem DLL Worldfall redistribuída.
+- **Experimental**: requer teste real do mute no grupo e dos campos de GPU/vinheta.
+
+## v0.2.10-alpha — Global BGM mute
+- `bus:/Music` e `FirstPersonAudio.MusicVolume` alterados quando o SCP está em TRIGGERED ou RAGE, independentemente da posse.

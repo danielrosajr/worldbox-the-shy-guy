@@ -58,9 +58,9 @@
   "DeathFlashEnabled": "Flash quando o SCP mata o jogador possuído",
   "DeathFlashDuration Description": "Duração da imagem após o SCP eliminar o personagem controlado.",
   "DeathFlashEnabled Description": "Ativar apenas na morte causada pelo SCP-096, sem alterar mortes normais.",
-  "MusicOverrideEnabled": "Silenciar música do jogo quando jogador é a vítima",
-  "MusicOverrideEnabled Description": "Não altera efeitos sonoros nem a música personalizada do SCP.",
-  "MusicFadeDownSeconds": "Tempo para silenciar música original (segundos)",
+  "MusicOverrideEnabled": "Silenciar músicas do jogo durante toda a perseguição",
+  "MusicOverrideEnabled Description": "Quando qualquer NPC ou jogador ativar o SCP, silencia a trilha do WorldBox e WorldFall durante TRIGGERED e RAGE; mantém ambiente, efeitos e áudios do SCP.",
+  "MusicFadeDownSeconds": "Tempo para silenciar músicas do jogo (segundos)",
   "MusicFadeDownSeconds Description": "Apenas o volume da trilha musical é reduzido.",
   "MusicFadeUpSeconds": "Tempo para restaurar música original (segundos)",
   "MusicFadeUpSeconds Description": "O volume original é preservado e restaurado quando o SCP encerra a perseguição.",
@@ -79,5 +79,9 @@
   "trait_ArvakSCP096_RageSpeed3": "Fúria acelerada do SCP-096",
   "trait_ArvakSCP096_RageSpeed3_info": "Estágio temporário de velocidade que não se acumula com os demais.",
   "trait_ArvakSCP096_RageSpeed4": "Fúria acelerada do SCP-096",
-  "trait_ArvakSCP096_RageSpeed4_info": "Estágio temporário de velocidade que não se acumula com os demais."
+  "trait_ArvakSCP096_RageSpeed4_info": "Estágio temporário de velocidade que não se acumula com os demais.",
+  "DreadVisionEnabled": "Visão macabra para a próxima vítima (WorldFall)",
+  "DreadVisionEnabled Description": "Escurece o 3D apenas quando o personagem controlado é a próxima vítima, sem alterar o mapa 2D.",
+  "DreadVisionStrength": "Intensidade da visão macabra (0–1)",
+  "DreadVisionStrength Description": "Ajusta a vinheta e as sombras do renderizador 3D. Mantenha abaixo de 1 se a cena ficar escura demais."
 }

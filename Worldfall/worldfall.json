@@ -2,7 +2,7 @@
   "id": "arvak_scp096_worldfall",
   "title": "SCP-096: The Shy Guy - 3D model",
   "author": "Arvak",
-  "version": "0.2.9",
+  "version": "0.2.12",
   "description": "An original pale, long-armed model for scp096_shyguy. Requires the SCP-096 NeoModLoader mod.",
   "worldfall": "0.9.8",
   "fit": false
