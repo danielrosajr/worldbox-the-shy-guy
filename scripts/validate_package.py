@@ -7,7 +7,7 @@ import struct
 root = Path(__file__).resolve().parents[1]
 manifest = json.loads((root / 'mod.json').read_text())
 config = json.loads((root / 'default_config.json').read_text())
-assert manifest['version'] == '0.2.15'
+assert manifest['version'] == '0.2.16'
 assert manifest['name'] == 'SCP-096 The Shy Guy'
 assert 'SCP096' in config and all(x['Id'] for x in config['SCP096'])
 for f in ['ModClass.cs', 'src/WorldBridge.cs', 'src/Reflect.cs', 'src/StateMachine.cs', 'src/WitnessQueue.cs', 'src/Traits.cs', 'src/WorldfallSight.cs','src/DynamicMusicController.cs','src/ShyGuyOverlay.cs','src/WorldfallDreadFilter.cs']:
@@ -136,7 +136,7 @@ assert 'internal void Refresh(float now)' in sight
 assert 'if (_worldfallSight != null)' in src and '_worldfallSight.Refresh(now);' in src
 assert 'if (_dread != null && !_dreadPreview) _dread.RestoreImmediately();' in src
 assert 'DREAD PREVIEW F5:' in src and 'DREAD PREVIEW: 3D=' in src
-assert 'private const string Version = "0.2.15"' in src
+assert 'private const string Version = "0.2.16"' in src
 assert 'DREAD RT: esperando renderizador 3D' in (root/'src/WorldfallDreadFilter.cs').read_text()
 print('PASS: v0.2.14 independent 3D detection + persistent F5 preview + diagnostics.')
 
@@ -157,6 +157,26 @@ triangles = sum(gltf['accessors'][p['indices']]['count']//3
 assert 10000 <= triangles <= 25000, triangles
 assert all('COLOR_0' in p['attributes']
            for m in gltf['meshes'] for p in m['primitives'])
-assert json.loads((root/'Worldfall/worldfall.json').read_text())['version'] == '0.2.15'
+assert json.loads((root/'Worldfall/worldfall.json').read_text())['version'] == '0.2.16'
 assert 'SCENE.export(file_type="glb")' in (root/'scripts/build_scp096_glb.py').read_text()
 print(f'PASS: v0.2.15 original vertex-colored GLB: {len(gltf["meshes"])} meshes, {triangles} triangles.')
+
+# v0.2.16: 1.5s reticle, independent proximity, on-demand pack installation.
+mod=(root/'ModClass.cs').read_text()
+sight=(root/'src/WorldfallSight.cs').read_text()
+config_keys={x['Id']:x for x in config['SCP096']}
+assert 'WorldfallReticleHoldSeconds' in config_keys
+assert config_keys['WorldfallReticleHoldSeconds']['TextVal'] == '1.5'
+assert config_keys['WorldfallProximityTiles']['TextVal'] == '4'
+assert 'WorldfallReticleMode' in config_keys
+assert 'WorldfallProximityEnabled' in config_keys
+assert 'private float _worldfallLookAt, _worldfallMaxTiles = 35f, _worldfallLookHold = 1.5f;' in mod
+assert '!_worldfallReticleMode && _worldfallRequireFacing' in mod
+assert 'aproximacao WorldFall 3D' in mod
+assert '_worldfallNearTiles' in mod and 'reticulo WorldFall durante 1.5s' in mod
+assert 'WorldfallPackInstaller' in mod
+assert (root/'src/WorldfallPackInstaller.cs').is_file()
+assert 'SameFile' in (root/'src/WorldfallPackInstaller.cs').read_text()
+assert (root/'scripts/check-worldfall-pack.sh').is_file()
+assert 'GLB novo' in (root/'scripts/check-worldfall-pack.sh').read_text() or 'GLB NOVO' in (root/'scripts/check-worldfall-pack.sh').read_text()
+print('PASS: v0.2.16 gaze 1.5s, proximity 3D, byte-verified opt-in WorldFall model install.')

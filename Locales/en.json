@@ -83,5 +83,13 @@
   "DreadVisionEnabled": "Ominous WorldFall POV for current victim",
   "DreadVisionEnabled Description": "Darkens the 3D renderer when the possessed character is the current SCP-096 target; never affects map mode.",
   "DreadVisionStrength": "Dread vision intensity (0–1)",
-  "DreadVisionStrength Description": "Adjusts vignette and shadows in the native 3D renderer; lower it for less darkness."
+  "DreadVisionStrength Description": "Adjusts vignette and shadows in the native 3D renderer; lower it for less darkness.",
+  "WorldfallReticleMode": "WorldFall: aim at SCP (any orientation)",
+  "WorldfallReticleMode Description": "Triggers SCP after holding your crosshair on it for 1.5 seconds, regardless of face orientation.",
+  "WorldfallReticleHoldSeconds": "Crosshair hold duration (seconds)",
+  "WorldfallReticleHoldSeconds Description": "How long you must keep the crosshair continuously on SCP-096.",
+  "WorldfallProximityEnabled": "WorldFall: proximity trigger",
+  "WorldfallProximityEnabled Description": "Triggers SCP when the controlled character comes too close, without aiming.",
+  "WorldfallProximityTiles": "WorldFall proximity radius (tiles)",
+  "WorldfallProximityTiles Description": "Distance threshold for player proximity triggering SCP-096."
 }

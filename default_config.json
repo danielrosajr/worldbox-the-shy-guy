@@ -76,6 +76,26 @@
       "BoolVal": true
     },
     {
+      "Id": "WorldfallReticleMode",
+      "Type": "SWITCH",
+      "BoolVal": true
+    },
+    {
+      "Id": "WorldfallReticleHoldSeconds",
+      "Type": "TEXT",
+      "TextVal": "1.5"
+    },
+    {
+      "Id": "WorldfallProximityEnabled",
+      "Type": "SWITCH",
+      "BoolVal": true
+    },
+    {
+      "Id": "WorldfallProximityTiles",
+      "Type": "TEXT",
+      "TextVal": "4"
+    },
+    {
       "Id": "WorldfallMaxLookTiles",
       "Type": "TEXT",
       "TextVal": "35"

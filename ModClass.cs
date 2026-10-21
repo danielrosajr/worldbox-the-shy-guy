@@ -8,7 +8,7 @@ namespace SCP096TheShyGuy
 {
     public sealed class ModClass : BasicMod<ModClass>
     {
-        private const string Version = "0.2.15";
+        private const string Version = "0.2.16";
         private const int MaxAttackAttempts = 3;
         private WorldBridge _world;
         private WorldfallSight _worldfallSight;
@@ -16,6 +16,7 @@ namespace SCP096TheShyGuy
         private DynamicMusicController _music;
         private ShyGuyOverlay _overlay;
         private WorldfallDreadFilter _dread;
+        private WorldfallPackInstaller _packInstaller;
         private bool _dreadEnabled = true, _dreadPreview;
         private float _nextDreadPreviewLog;
         private float _dreadStrength = .85f;
@@ -26,10 +27,15 @@ namespace SCP096TheShyGuy
         private float _deathFlashDuration = 2.6f;
         private float _cooldownUntil, _cooldownSeconds = 15f;
         private bool _worldfallLookEnabled = true;
+        // NEW 0.2.16: reticle hold replaces the ambiguous face/head direction check.
+        // Uses a NEW key to avoid legacy NML configs reverting 1.5s to 0.45s.
+        private bool _worldfallReticleMode = true;
+        private bool _worldfallNearEnabled = true;
+        private float _worldfallNearTiles = 4f;
         private bool _allowProximityWithWorldfall = false;
-        private float _worldfallLookAt, _worldfallMaxTiles = 35f, _worldfallLookHold = .45f;
+        private float _worldfallLookAt, _worldfallMaxTiles = 35f, _worldfallLookHold = 1.5f;
         private float _worldfallRecheckSeconds = .18f;
-        private bool _worldfallRequireFacing = true;
+        private bool _worldfallRequireFacing = true; // legacy mode only; reticle mode overrides this
         private float _worldfallFacingOffset = 0f, _worldfallFaceCone = 65f;
         
         private ShyGuyBrain _brain;
@@ -87,6 +93,9 @@ namespace SCP096TheShyGuy
             _music.FadeDownSeconds = _musicFadeDown;
             _music.FadeUpSeconds = _musicFadeUp;
             _music.DuckFraction = _musicDuckingPercent / 100f;
+            _packInstaller = new WorldfallPackInstaller(GetDeclaration().FolderPath);
+            _packInstaller.Check();
+            Log("WORLD FALL PACK: " + _packInstaller.Status);
             _dread = new WorldfallDreadFilter(Log);
             _dread.Enabled = _dreadEnabled;
             _dread.Strength = _dreadStrength;
@@ -103,7 +112,7 @@ namespace SCP096TheShyGuy
             }
             else Log("Asset pendente: " + reason);
             _initialized = true;
-            Log("v" + Version + " WORLD FALL DREAD PREVIEW FIX: leitura 3D independente da existencia do SCP; musica/FIFO intactos");
+            Log("v" + Version + " RETICLE 1.5s + proximity 3D + instalador do modelo WorldFall; audio/Dread/FIFO preservados");
         }
 
         private void Update()
@@ -253,13 +262,35 @@ namespace SCP096TheShyGuy
             if (_worldfallLookEnabled && now >= _worldfallLookAt)
             {
                 _worldfallLookAt = now + _worldfallRecheckSeconds;
-                _worldfallSight.Configure(_worldfallFacingOffset, _worldfallFaceCone, _worldfallRequireFacing);
+                // Aiming at the character itself (body/head/back), independent of its heading.
+                // In legacy mode the previous front-facing mechanic remains selectable.
+                _worldfallSight.Configure(_worldfallFacingOffset, _worldfallFaceCone,
+                    !_worldfallReticleMode && _worldfallRequireFacing);
                 object observer;
                 if (_worldfallSight.Check(_world, _scp, _worldfallMaxTiles, _worldfallLookHold,
                     now, out observer) && observer != null)
-                    EnqueueWitness(observer, now, "rosto na camera Worldfall (3D)");
+                    EnqueueWitness(observer, now,
+                        _worldfallReticleMode ? "reticulo WorldFall durante 1.5s (qualquer lado)" :
+                        "rosto na camera WorldFall (legado)");
                 string transition = _worldfallSight.TakeTransition();
                 if (!string.IsNullOrEmpty(transition)) Log("WorldfallSight: " + transition);
+            }
+
+            // Separate WorldFall first-person proximity trigger, not dependent on the
+            // old 'AllowProximityWhilePossessing' setting saved in NML config.
+            // Only the currently possessed, alive actor may satisfy this condition.
+            // Do not pollute the existing lightweight NPC proximity witness scan.
+            if (_worldfallNearEnabled && _worldfallSight != null &&
+                _worldfallSight.IsPossessing && _world.IsAlive(_scp))
+            {
+                object localActor = _worldfallSight.CurrentControlledActor;
+                if (localActor != null && _world.IsAlive(localActor) &&
+                    !ReferenceEquals(localActor, _scp) &&
+                    _world.Within(_scp, localActor, _worldfallNearTiles))
+                {
+                    EnqueueWitness(localActor, now, "aproximacao WorldFall 3D (" +
+                        _worldfallNearTiles.ToString("0.0") + " tiles)");
+                }
             }
 
             if (now >= _proximityScanAt)
@@ -439,8 +470,7 @@ namespace SCP096TheShyGuy
                 // The possessed human must see the FACE to become a witness.
                 bool isControlled = _worldfallSight.Is3DWorldfallView &&
                     ReferenceEquals(actor, _worldfallSight.CurrentControlledActor);
-                bool newlyObserved = _enableProximity &&
-                    (!isControlled || _allowProximityWithWorldfall) &&
+                bool newlyObserved = _enableProximity && !isControlled &&
                     _world.Within(_scp, actor, _proximityDistance);
                 // Full-world trait scan only every 12 seconds, not every frame.
                 if (!newlyObserved && !fullScan) continue;
@@ -493,7 +523,7 @@ namespace SCP096TheShyGuy
                 if ((playerWitness || mapWitness) && _overlay != null && _audio.VisualCueEnabled)
                     _overlay.Show(_audio.FlashDuration,
                         playerWitness ? _audio.FlashOpacity : Mathf.Min(.42f, _audio.FlashOpacity),
-                        playerWitness ? "rosto visto pelo jogador WorldFall" : "proximidade 2D", playerWitness);
+                        playerWitness ? (source.StartsWith("aproximacao") ? "SCP proximo no WorldFall" : "SCP sob o reticulo WorldFall") : "proximidade 2D", playerWitness);
             }
         }
 
@@ -655,7 +685,7 @@ namespace SCP096TheShyGuy
             GUI.Box(r, "SCP-096 - THE SHY GUY | v" + Version);
             if (GUI.Button(new Rect(r.x + r.width - 28, r.y + 3, 24, 22), "X")) _showPanel = false;
             Rect viewport = new Rect(r.x + 6, r.y + 28, r.width - 12, r.height - 35);
-            _scroll = GUI.BeginScrollView(viewport, _scroll, new Rect(0, 0, 324, 1510));
+            _scroll = GUI.BeginScrollView(viewport, _scroll, new Rect(0, 0, 324, 1740));
             float y = 0, x = 3;
             GUI.Label(new Rect(x,y,315,23), "Mapa: " + _world.Readiness); y+=23;
             GUI.Label(new Rect(x,y,315,23), "SCP: " + (_scp != null ? "encontrado" : "nenhum") +
@@ -663,14 +693,20 @@ namespace SCP096TheShyGuy
             GUI.Label(new Rect(x,y,315,23), "Fila de testemunhas: " + _queue.Count +
                 " | Eliminadas: " + _killsConfirmed); y+=23;
             GUI.Label(new Rect(x,y,315,23), "Alvo: " + (_victim == null ? "nenhum" : _world.TargetDistance(_scp, _victim))); y+=25;
-            _worldfallLookEnabled = GUI.Toggle(new Rect(x,y,315,23), _worldfallLookEnabled, "Worldfall: detectar olhar (experimental)"); y+=24;
+            _worldfallLookEnabled = GUI.Toggle(new Rect(x,y,315,23), _worldfallLookEnabled,
+                "WorldFall: detectar SCP na mira"); y+=24;
+            _worldfallReticleMode = GUI.Toggle(new Rect(x,y,315,23), _worldfallReticleMode,
+                "Reticulo: 1,5s sem exigir rosto (recomendado)"); y+=24;
+            _worldfallNearEnabled = GUI.Toggle(new Rect(x,y,315,23), _worldfallNearEnabled,
+                "3D: ativar por proximidade (4 tiles)"); y+=24;
             _worldfallRequireFacing = GUI.Toggle(new Rect(x,y,315,23), _worldfallRequireFacing,
-                "Exigir SCP de frente (Heading)"); y+=24;
+                "Modo antigo: exigir SCP de frente (desativado no reticulo)"); y+=24;
             if (GUI.Button(new Rect(x,y,316,25), "Inverter sentido do rosto (offset 180)") )
                 _worldfallFacingOffset = _worldfallFacingOffset == 0f ? 180f : 0f;
             y+=29;
-            GUI.Label(new Rect(x,y,315,23), "Offset rosto: " + _worldfallFacingOffset.ToString("0") +
-                " deg | F10 para diagnostico"); y+=24;
+            GUI.Label(new Rect(x,y,315,23), "Reticulo: " + _worldfallLookHold.ToString("0.0") +
+                "s | perto: " + _worldfallNearTiles.ToString("0.0") +
+                " tiles | F10: diagnostico"); y+=24;
             GUI.Label(new Rect(x,y,315,40), "Visao 3D: " + _worldfallSight.ShortStatus); y+=42;
             _enableChase = GUI.Toggle(new Rect(x,y,315,23), _enableChase, "Perseguir e eliminar"); y+=25;
             _enableProximity = GUI.Toggle(new Rect(x,y,320,23), _enableProximity,
@@ -745,6 +781,17 @@ namespace SCP096TheShyGuy
                 }
                 GUI.Label(new Rect(x,y,315,22), "Override: " + (_music == null ? "n/a" : _music.Status));
                 y+=26;
+            }
+            if (_packInstaller != null)
+            {
+                GUI.Label(new Rect(x,y,315,36), "GLB WorldFall: " + _packInstaller.Status); y+=35;
+                if (GUI.Button(new Rect(x,y,316,29), "INSTALAR / VERIFICAR MODELO 3D"))
+                {
+                    bool updated = _packInstaller.Install();
+                    Log("WORLD FALL PACK: " + (updated ? "instalado; REINICIE o WorldBox" :
+                        "falha: " + _packInstaller.Status));
+                }
+                y+=37;
             }
             if (GUI.Button(new Rect(x,y,152,31), "Gerar aqui [F6]")) Spawn(false);
             if (GUI.Button(new Rect(x+160,y,156,31), "Gerar isolado")) Spawn(true);
@@ -880,6 +927,10 @@ namespace SCP096TheShyGuy
             Log(_world.DiagnosticMethods(_scp));
             Log(_world.DiagnosticShadows());
             Log("Ultimo movimento=" + _world.LastMoveSignature + " ultima execucao=" + _world.LastKillSignature);
+            if (_packInstaller != null) { _packInstaller.Check(); Log("WORLD FALL PACK: " + _packInstaller.Status); }
+            Log("3D TRIGGERS: reticleMode=" + _worldfallReticleMode +
+                " hold=" + _worldfallLookHold.ToString("0.00") +
+                "s proximity=" + _worldfallNearEnabled + " radius=" + _worldfallNearTiles.ToString("0.0"));
             Log("MUSIC=" + (_music == null ? "null" : _music.Status) +
                 " OVERLAY=" + (_overlay == null ? "null" : _overlay.Status) +
                 " DREAD=" + (_dread == null ? "null" : _dread.Status));
@@ -935,7 +986,13 @@ namespace SCP096TheShyGuy
                 object cameraFlag = GetConfig()["SCP096"]["WorldfallFaceDetection"].GetValue();
                 if (cameraFlag is bool) _worldfallLookEnabled = (bool)cameraFlag;
                 _worldfallMaxTiles = ConfigFloat("WorldfallMaxLookTiles", 35f, 2f, 120f);
-                _worldfallLookHold = ConfigFloat("WorldfallLookHoldSeconds", .45f, .1f, 3f);
+                // New key bypasses old per-user NML value 0.45s.
+                _worldfallLookHold = ConfigFloatOptional("WorldfallReticleHoldSeconds", 1.5f, .3f, 8f);
+                _worldfallNearTiles = ConfigFloatOptional("WorldfallProximityTiles", 4f, 1f, 15f);
+                try { object v = GetConfig()["SCP096"]["WorldfallReticleMode"].GetValue();
+                    if (v is bool) _worldfallReticleMode = (bool)v; } catch { }
+                try { object v = GetConfig()["SCP096"]["WorldfallProximityEnabled"].GetValue();
+                    if (v is bool) _worldfallNearEnabled = (bool)v; } catch { }
                 _worldfallFaceCone = ConfigFloat("WorldfallFaceConeDegrees", 65f, 10f, 89f);
                 _worldfallFacingOffset = ConfigFloat("WorldfallFacingOffsetDegrees", 0f, -360f, 360f);
                 object facing = GetConfig()["SCP096"]["WorldfallRequireFacing"].GetValue();

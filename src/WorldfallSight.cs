@@ -117,7 +117,7 @@ namespace SCP096TheShyGuy
                 _reads++;
                 if (_picked != null) _successfulPicks++;
                 _status = _controlled == null ? "WorldFall: Host nulo" :
-                    "WorldFall: mira 3D disponivel; verificando face";
+                    "WorldFall: mira 3D disponivel; verificando reticulo";
             }
             catch (Exception e)
             {
@@ -205,9 +205,13 @@ namespace SCP096TheShyGuy
                 " matchSCP=" + pickedScp + " dist=" + distance.ToString("0.0");
             if (!pickedScp)
             {
-                _lastReason = "SCP nao esta sob mira renderizada"; _hudHint = "MIRE NO SCP"; ClearHold(); return false;
+                _lastReason = "SCP nao esta sob reticulo renderizado"; _hudHint = "MIRE NO SCP"; ClearHold(); return false;
             }
-            bool front = FaceTowardsViewer(scp, sx, sy, out _faceDetail);
+            // In new reticle mode we deliberately do not even query Heading.
+            // It can be missing or inaccurate when models animate/rotate.
+            bool front = false;
+            if (_requireFacing) front = FaceTowardsViewer(scp, sx, sy, out _faceDetail);
+            else _faceDetail = "modo reticulo: nenhuma exigencia de direcao/rosto";
             if (_requireFacing && !front)
             {
                 _lastReason = "SCP visivel, mas face nao confirmada: " + _faceDetail;
@@ -216,9 +220,10 @@ namespace SCP096TheShyGuy
             }
             if (_lookSince < 0) _lookSince = now;
             float held = now - _lookSince;
-            _lastReason = "SCP sob mira, frente=" + front + ", olhar=" + held.ToString("0.00") + "s";
+            _lastReason = "SCP sob mira, modo=" + (_requireFacing ? "face antiga" : "reticulo livre") +
+                " orientacao=" + front + ", olhar continuo=" + held.ToString("0.00") + "s";
             float remaining = Mathf.Max(0f, holdSeconds - held);
-            _hudHint = remaining <= 0f ? "ROSTO CONFIRMADO" : ("ROSTO DETECTADO " + remaining.ToString("0.0") + "s");
+            _hudHint = remaining <= 0f ? "SCP CONFIRMADO" : ("RETICULO SCP " + remaining.ToString("0.0") + "s");
             if (held >= holdSeconds && !_markedThisLook)
             {
                 _markedThisLook = true;

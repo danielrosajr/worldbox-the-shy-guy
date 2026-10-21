@@ -1,3 +1,53 @@
+# SCP-096: The Shy Guy — v0.2.16-alpha (Crosshair & WorldFall Pack Sync)
+
+## Duas correcoes centrais
+
+1. **Reticulo de 1,5s no WorldFall 3D:** basta manter o SCP sob a mira por 1,5 segundo continuamente. A direcao do rosto nao importa: frente, costas ou lado. Alcance de mira: ate 35 tiles (configuravel).
+2. **Aproximacao 3D:** o personagem atualmente controlado a ate 4 tiles do SCP (configuravel) tambem ativa a criatura, mesmo sem mirar. So funciona se for realmente um ator controlado, nao apenas uma unidade selecionada no mapa.
+
+Todos os outros sistemas continuam a partir da v0.2.15 (que preservava Dread e FMOD da v0.2.14): fila FIFO, RAGE, velocidade por vitima, cura, sons e silencio global de musicas. Nao ha nova animacao nesta versao.
+
+## MUITO IMPORTANTE: o GLB do WorldFall e separado da pasta Mods
+
+O GLB desta versao e o modelo detalhado da v0.2.15. Se ele parecia igual ao antigo, isso **pode ser porque o pack do WorldFall nao foi atualizado/ativado**.
+
+### Instalacao facilitada pelo proprio mod (recomendado)
+
+1. Feche o WorldBox e substitua a pasta antiga SCP-096 pela pasta `SCP096-TheShyGuy-0.2.16` dentro de `Mods`.
+2. Abra o WorldBox, carregue um mundo e abra **F5**.
+3. Role o painel ate a secao **GLB WorldFall**. O status informa se o modelo instalado e igual ao do mod ou esta antigo/ausente.
+4. Clique no botao **INSTALAR / VERIFICAR MODELO 3D**. Ele copia so o pack do SCP-096; nao altera WorldFall.dll nem outros packs.
+5. **Feche e reinicie WorldBox completamente** para o WorldFall reler os packs. Se necessario, no WorldFall pressione F2 > Mods > Manage e ative `SCP-096: The Shy Guy - Reborn 3D`.
+
+Alternativa pelo Ubuntu (sem abrir F5): execute de dentro da pasta extraida:
+
+```bash
+bash scripts/install-worldfall-pack.sh
+bash scripts/check-worldfall-pack.sh
+```
+
+O segundo comando deve dizer `IGUAIS` para o GLB, o que confirma que os **arquivos em disco** batem. Isso nao prova que o pack esta ATIVO; confirme no menu F2 e teste visualmente.
+
+### Teste de gatilho
+
+- No modo G/WorldFall, mantenha a mira sobre o corpo do SCP por 1,5s, mesmo que ele esteja de costas. Olhe para outro lugar antes do tempo: o contador zera.
+- Com o SCP docil (sem cooldown) aproxime-se ate menos de 4 tiles sem mirar. Devera entrar em TRIGGERED.
+- Se ele ja esta RAGE/Calming, ou o jogador ja entrou na fila, nao existe novo acionamento.
+
+### Logs
+
+```bash
+grep -nE 'WORLD FALL PACK|reticulo WorldFall|aproximacao WorldFall|3D TRIGGERS|error CS|Exception' ~/.config/unity3d/mkarpenko/WorldBox/Player.log | tail -120
+```
+
+### Limites conhecidos
+
+O GLB ainda e estatico e nao tem skeleton/animation clips. Esta versao evita mexer de novo na geometria ate termos certeza de que WorldFall esta usando o arquivo correto. A detecao por `get_Picked` depende de o WorldFall indicar a criatura sob o reticulo, e sera validada no gameplay. A checagem de pack nao confirma se o modelo ativo foi recarregado pela engine.
+
+**Validacao**: pacotes testados estaticamente e GLB verificado. Nao foi possivel executar o NeoModLoader/WorldFall neste ambiente.
+
+---
+
 # SCP-096: The Shy Guy — v0.2.15-alpha (The Shy Guy: Reborn)
 
 **Foco desta versão: modelo 3D original reconstruído.** A IA, o FMOD, a fila, a regeneração, a aceleração e o Dread são os da v0.2.14.

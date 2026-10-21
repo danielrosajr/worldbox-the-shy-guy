@@ -1,3 +1,12 @@
+## v0.2.16-alpha — Crosshair Trigger & WorldFall Pack Sync
+- Change: Player-controlled WorldFall victim now witnesses SCP after continuous 1.5s crosshair hold, independent of actor heading/face.
+- Feature: 3D proximity-only trigger at 4 tiles for the actually possessed actor, independent of old saved NML proximity flags.
+- Migration: new `WorldfallReticleHoldSeconds` key overrides legacy 0.45s configuration by design.
+- Feature: safe, opt-in F5 pack installer with exact-byte comparison and clear restart message; never modifies Worldfall.dll or unrelated packs.
+- Feature: Ubuntu scripts for verified GLB pack copying and checksum comparison.
+- Unchanged: v0.2.15 GLB geometry, v0.2.14 Dread, FMOD, FIFO, regen and chase.
+- Static checks only, not compiled or runtime tested in WorldBox.
+
 ## v0.2.15-alpha — The Shy Guy: Reborn (3D)
 - REBUILT: novo GLB original do SCP-096, em vez do antigo corpo 3D simples.
 - Visual: olhos profundamente escuros, lágrimas, boca alongada com dentes, clavículas/costelas salientes, torso atrofiado, braços e dedos exageradamente longos, pés e articulações remodelados.

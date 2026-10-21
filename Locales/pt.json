@@ -83,5 +83,13 @@
   "DreadVisionEnabled": "Visão macabra para a próxima vítima (WorldFall)",
   "DreadVisionEnabled Description": "Escurece o 3D apenas quando o personagem controlado é a próxima vítima, sem alterar o mapa 2D.",
   "DreadVisionStrength": "Intensidade da visão macabra (0–1)",
-  "DreadVisionStrength Description": "Ajusta a vinheta e as sombras do renderizador 3D. Mantenha abaixo de 1 se a cena ficar escura demais."
+  "DreadVisionStrength Description": "Ajusta a vinheta e as sombras do renderizador 3D. Mantenha abaixo de 1 se a cena ficar escura demais.",
+  "WorldfallReticleMode": "WorldFall: mirar no SCP (qualquer orientação)",
+  "WorldfallReticleMode Description": "Ativa o SCP após mirar por 1,5 segundo, sem exigir que o rosto esteja virado para você.",
+  "WorldfallReticleHoldSeconds": "Tempo do retículo (segundos)",
+  "WorldfallReticleHoldSeconds Description": "Quanto tempo a mira precisa permanecer sobre o SCP continuamente.",
+  "WorldfallProximityEnabled": "WorldFall: ativar por aproximação",
+  "WorldfallProximityEnabled Description": "Ativa o SCP quando o personagem controlado se aproxima demais, sem precisar mirar.",
+  "WorldfallProximityTiles": "Raio de proximidade em 3D (tiles)",
+  "WorldfallProximityTiles Description": "Distância limite para ativação por aproximação do jogador no WorldFall."
 }
