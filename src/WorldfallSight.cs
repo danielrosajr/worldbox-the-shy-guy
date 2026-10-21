@@ -127,6 +127,13 @@ namespace SCP096TheShyGuy
         }
         private void ClearHold() { _lookSince = -1f; _markedThisLook = false; }
 
+        // Independent worldfall presence probe for POV effects and manual previews.
+        // This deliberately does NOT enqueue witnesses or require a SCP to exist.
+        internal void Refresh(float now)
+        {
+            Read(now);
+        }
+
         private bool FaceTowardsViewer(object scp, float sx, float sy, out string description)
         {
             description = "Heading indisponivel";

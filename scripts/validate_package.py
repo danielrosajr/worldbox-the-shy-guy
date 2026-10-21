@@ -7,7 +7,7 @@ import struct
 root = Path(__file__).resolve().parents[1]
 manifest = json.loads((root / 'mod.json').read_text())
 config = json.loads((root / 'default_config.json').read_text())
-assert manifest['version'] == '0.2.12'
+assert manifest['version'] == '0.2.15'
 assert manifest['name'] == 'SCP-096 The Shy Guy'
 assert 'SCP096' in config and all(x['Id'] for x in config['SCP096'])
 for f in ['ModClass.cs', 'src/WorldBridge.cs', 'src/Reflect.cs', 'src/StateMachine.cs', 'src/WitnessQueue.cs', 'src/Traits.cs', 'src/WorldfallSight.cs','src/DynamicMusicController.cs','src/ShyGuyOverlay.cs','src/WorldfallDreadFilter.cs']:
@@ -120,3 +120,43 @@ assert 'group.getVolume(out checkVolume)' in music
 assert 'group.getVolume(out checkVolume, out finalVolume)' not in music
 assert 'found.getVolume(out original, out final)' in music
 print('PASS: FMOD Core ChannelGroup one-out-param / Studio Bus two-out-param regressions.')
+
+# v0.2.13: native GPU output instead of ineffective maxed-out ShadowDarkness.
+dread=(root/'src/WorldfallDreadFilter.cs').read_text()
+assert 'RenderTexture' in dread and 'GetField("_present"' in dread
+assert 'DefaultExecutionOrder(30000)' in dread and 'GL.Begin(GL.QUADS)' in dread
+assert 'EnsureLatePass()' in mod and '_dread.Dispose();' in mod
+assert 'DREAD RT: frame=' in dread
+print('PASS: 0.2.13 WorldFall RT compositor structural regressions; requires runtime visual check.')
+
+# v0.2.14: Dread 3D detection remains live without SCP and manual preview persists.
+src=(root/'ModClass.cs').read_text()
+sight=(root/'src/WorldfallSight.cs').read_text()
+assert 'internal void Refresh(float now)' in sight
+assert 'if (_worldfallSight != null)' in src and '_worldfallSight.Refresh(now);' in src
+assert 'if (_dread != null && !_dreadPreview) _dread.RestoreImmediately();' in src
+assert 'DREAD PREVIEW F5:' in src and 'DREAD PREVIEW: 3D=' in src
+assert 'private const string Version = "0.2.15"' in src
+assert 'DREAD RT: esperando renderizador 3D' in (root/'src/WorldfallDreadFilter.cs').read_text()
+print('PASS: v0.2.14 independent 3D detection + persistent F5 preview + diagnostics.')
+
+# v0.2.15: procedural GLB geometry must be real, moderately sized,
+# vertex-colored, and preserve prior node identifiers and orientation.
+model = root / 'Worldfall/models/animal_scp096_shyguy.glb'
+data = model.read_bytes()
+assert data[:4] == b'glTF' and struct.unpack_from('<I',data,4)[0] == 2
+assert struct.unpack_from('<I',data,8)[0] == len(data)
+chunk_len = struct.unpack_from('<I',data,12)[0]
+assert data[16:20] == b'JSON'
+gltf = json.loads(data[20:20+chunk_len])
+names = {m.get('name') for m in gltf['meshes']}
+assert {'body','head','claw_l','claw_r','leg_l','leg_r'}.issubset(names), names
+assert len(gltf['meshes']) >= 11
+triangles = sum(gltf['accessors'][p['indices']]['count']//3
+                for m in gltf['meshes'] for p in m['primitives'])
+assert 10000 <= triangles <= 25000, triangles
+assert all('COLOR_0' in p['attributes']
+           for m in gltf['meshes'] for p in m['primitives'])
+assert json.loads((root/'Worldfall/worldfall.json').read_text())['version'] == '0.2.15'
+assert 'SCENE.export(file_type="glb")' in (root/'scripts/build_scp096_glb.py').read_text()
+print(f'PASS: v0.2.15 original vertex-colored GLB: {len(gltf["meshes"])} meshes, {triangles} triangles.')

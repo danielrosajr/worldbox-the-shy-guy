@@ -1,9 +1,9 @@
 {
   "id": "arvak_scp096_worldfall",
-  "title": "SCP-096: The Shy Guy - 3D model",
+  "title": "SCP-096: The Shy Guy - Reborn 3D",
   "author": "Arvak",
-  "version": "0.2.12",
-  "description": "An original pale, long-armed model for scp096_shyguy. Requires the SCP-096 NeoModLoader mod.",
+  "version": "0.2.15",
+  "description": "Original detailed pale humanoid GLB: hollow eyes, sobbing mouth, bony torso, long articulated fingers. Static pose; no rig or animations yet. Requires SCP-096 NML mod.",
   "worldfall": "0.9.8",
   "fit": false
 }

@@ -8,7 +8,7 @@ namespace SCP096TheShyGuy
 {
     public sealed class ModClass : BasicMod<ModClass>
     {
-        private const string Version = "0.2.12";
+        private const string Version = "0.2.15";
         private const int MaxAttackAttempts = 3;
         private WorldBridge _world;
         private WorldfallSight _worldfallSight;
@@ -17,6 +17,7 @@ namespace SCP096TheShyGuy
         private ShyGuyOverlay _overlay;
         private WorldfallDreadFilter _dread;
         private bool _dreadEnabled = true, _dreadPreview;
+        private float _nextDreadPreviewLog;
         private float _dreadStrength = .85f;
         private object _localThreatActor, _pendingLocalDeath;
         private bool _testMusicOverride, _musicOverrideEnabled = true;
@@ -89,6 +90,7 @@ namespace SCP096TheShyGuy
             _dread = new WorldfallDreadFilter(Log);
             _dread.Enabled = _dreadEnabled;
             _dread.Strength = _dreadStrength;
+            _dread.EnsureLatePass();
             _overlay = new ShyGuyOverlay(_audio.FaceImage, Log);
             _overlay.Enabled = _visualCueEnabled;
             _traitsRegistered = ShyGuyTraits.Register();
@@ -101,7 +103,7 @@ namespace SCP096TheShyGuy
             }
             else Log("Asset pendente: " + reason);
             _initialized = true;
-            Log("v" + Version + " WORLD FALL MUSIC GROUP + DREAD POV: native _music group, per-target 3D shading; preserve FIFO chase");
+            Log("v" + Version + " WORLD FALL DREAD PREVIEW FIX: leitura 3D independente da existencia do SCP; musica/FIFO intactos");
         }
 
         private void Update()
@@ -123,7 +125,8 @@ namespace SCP096TheShyGuy
                 if (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift))
                 {
                     _dreadPreview = !_dreadPreview;
-                    Log("DREAD POV: preview SHIFT+F9=" + _dreadPreview);
+                    Log("DREAD PREVIEW: atalho=" + _dreadPreview + " firstPerson=" +
+                        (_worldfallSight != null && _worldfallSight.Is3DWorldfallView));
                 }
                 else Diagnostic();
             }
@@ -151,6 +154,16 @@ namespace SCP096TheShyGuy
             {
                 if (_placeOnMap) { _placeOnMap = false; SpawnOnClickedTile(); }
                 else if (_selectRemote) { _selectRemote = false; MarkVictim(now); }
+            }
+            // v0.2.14: WorldFall camera/possession is independent of SCP existence.
+            // In 0.2.13, Check() was only executed AFTER the `_scp == null` return,
+            // so the F5 Dread preview never detected first-person without a SCP.
+            if (_worldfallSight != null)
+            {
+                _worldfallSight.Refresh(now);
+                string worldfallTransition = _worldfallSight.TakeTransition();
+                if (!string.IsNullOrEmpty(worldfallTransition))
+                    Log("WorldfallSight: " + worldfallTransition);
             }
             if (now < _tickAt) return;
             _tickAt = now + _tickSeconds;
@@ -199,11 +212,11 @@ namespace SCP096TheShyGuy
                     _queue.Clear();
                     _sessionOnlyWitnesses.Clear();
                     _brain.Reset(now);
-                    _dreadPreview = false;
-            if (_dread != null) _dread.RestoreImmediately();
-            if (_audio != null) _audio.Reset();
+                    // Preview remains user-controlled even with no live SCP.
+                    // A killed/absent SCP must not stop a manual render test.
+                    if (_dread != null && !_dreadPreview) _dread.RestoreImmediately();
+                    if (_audio != null) _audio.Reset();
                     if (_music != null) _music.RestoreImmediately();
-            if (_dread != null) _dread.RestoreImmediately();
                     if (_overlay != null) _overlay.Reset();
                     _localThreatActor = _pendingLocalDeath = null;
                     _testMusicOverride = false;
@@ -581,15 +594,26 @@ namespace SCP096TheShyGuy
         private void LateUpdate()
         {
             if (!_initialized) return;
+            // Independent of the SCP: F5 preview must work without spawning anything.
+            if (_worldfallSight != null) _worldfallSight.Refresh(Time.unscaledTime);
             if (_music != null) _music.Tick(Time.unscaledTime, Time.unscaledDeltaTime);
             if (_dread != null)
             {
                 bool targetedPlayer = _worldfallSight != null && _worldfallSight.IsPossessing &&
                     _victim != null && ReferenceEquals(_victim, _worldfallSight.CurrentControlledActor) &&
                     _brain != null && (_brain.State == ShyGuyState.Triggered || _brain.State == ShyGuyState.Rage);
+                bool firstPerson = _worldfallSight != null && _worldfallSight.Is3DWorldfallView;
                 _dread.Tick(Time.unscaledTime, Time.unscaledDeltaTime,
-                    (targetedPlayer || _dreadPreview) &&
-                    _worldfallSight != null && _worldfallSight.Is3DWorldfallView);
+                    (targetedPlayer || _dreadPreview) && firstPerson);
+                // Periodic independent diagnostics while testing. The logs now reveal
+                // whether the blocker is camera detection or the GPU compositor.
+                if (_dreadPreview && Time.unscaledTime >= _nextDreadPreviewLog)
+                {
+                    _nextDreadPreviewLog = Time.unscaledTime + 8f;
+                    Log("DREAD PREVIEW: 3D=" + firstPerson + " target=" + targetedPlayer +
+                        " sight=" + (_worldfallSight == null ? "null" : _worldfallSight.ShortStatus) +
+                        " renderer=" + _dread.Status);
+                }
             }
             if (_overlay != null) _overlay.LateUpdate(
                 _worldfallSight != null && _worldfallSight.Is3DWorldfallView);
@@ -603,7 +627,7 @@ namespace SCP096TheShyGuy
         private void OnDestroy()
         {
             if (_music != null) _music.RestoreImmediately();
-            if (_dread != null) _dread.RestoreImmediately();
+            if (_dread != null) _dread.Dispose();
             if (_overlay != null) _overlay.Destroy();
         }
         private void OnGUI()
@@ -708,8 +732,15 @@ namespace SCP096TheShyGuy
                         (_dread.Strength * 100f).ToString("0") + "%"); y+=21;
                     _dread.Strength = GUI.HorizontalSlider(new Rect(x,y+2f,315,15),
                         _dread.Strength, 0f, 1f); y+=22;
-                    if (GUI.Button(new Rect(x,y,316,26), _dreadPreview ? "Parar preview de medo" : "Preview POV macabro [Shift+F9]"))
+                    if (GUI.Button(new Rect(x,y,316,26), _dreadPreview ? "Parar preview de medo" : "Testar POV macabro (sem Shift)"))
+                    {
                         _dreadPreview = !_dreadPreview;
+                        if (_worldfallSight != null) _worldfallSight.Refresh(Time.unscaledTime);
+                        Log("DREAD PREVIEW F5: " + _dreadPreview +
+                            " firstPerson=" + (_worldfallSight != null && _worldfallSight.Is3DWorldfallView) +
+                            " scpExiste=" + (_scp != null) +
+                            " filtro=" + (_dread == null ? "null" : _dread.Status));
+                    }
                     y+=32;
                 }
                 GUI.Label(new Rect(x,y,315,22), "Override: " + (_music == null ? "n/a" : _music.Status));

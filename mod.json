@@ -1,8 +1,8 @@
 {
   "name": "SCP-096 The Shy Guy",
   "author": "Arvak",
-  "version": "0.2.12",
-  "description": "Hotfix FMOD.ChannelGroup.getVolume overload (CS1501); preserves WorldFall native music mute and victim dread POV.",
+  "version": "0.2.15",
+  "description": "SCP-096 3D Reborn: rebuilt original emaciated GLB with expressive face, skeletal anatomy and long hands; v0.2.14 gameplay/Dread preserved.",
   "iconPath": "icon.png",
   "ModType": "NEOMOD"
 }
